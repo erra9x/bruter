@@ -16,6 +16,8 @@
 
 # Features
 
+![bruter](static/bruter_demo.png)
+
 Available modules:
 
 - `clickhouse`
