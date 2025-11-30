@@ -1,104 +1,50 @@
 package scanner
 
 import (
-	"fmt"
+	"errors"
 	"net"
+	"os"
 	"strconv"
 	"strings"
 )
 
-// ParseIPOrCIDR parses a string input and returns an array of valid IP addresses.
-func ParseIPOrCIDR(input string) ([]string, error) {
-	if strings.Contains(input, "-") {
-		return parseIPRange(input)
-	}
+func ParseTarget(target string, defaultPort int) (*Target, error) {
+	testTarget := strings.Split(target, ":")
 
-	ip := net.ParseIP(input)
-	if ip != nil {
-		return []string{ip.String()}, nil
-	}
-
-	_, ipNet, err := net.ParseCIDR(input)
-	if err != nil {
-		return nil, fmt.Errorf("invalid IP, CIDR, or range format: %s", input)
-	}
-
-	var ips []string
-	for ip := ipNet.IP.Mask(ipNet.Mask); ipNet.Contains(ip); incrementIP(ip) {
-		if isNetworkOrBroadcast(ip, ipNet) {
-			continue
+	if len(testTarget) == 2 {
+		ip := net.ParseIP(testTarget[0])
+		if ip == nil {
+			return nil, errors.New("invalid IP address")
 		}
-		ips = append(ips, ip.String())
-	}
 
-	return ips, nil
-}
-
-// parseIPRange handles IP range inputs like "192.168.0.1-10"
-func parseIPRange(input string) ([]string, error) {
-	parts := strings.Split(input, "-")
-	if len(parts) != 2 {
-		return nil, fmt.Errorf("invalid range format: %s", input)
-	}
-
-	baseIP := net.ParseIP(parts[0])
-	if baseIP == nil {
-		return nil, fmt.Errorf("invalid IP address in range: %s", parts[0])
-	}
-
-	lastOctet, err := strconv.Atoi(parts[1])
-	if err != nil {
-		return nil, fmt.Errorf("invalid range end: %s", parts[1])
-	}
-
-	octets := strings.Split(parts[0], ".")
-	if len(octets) != 4 {
-		return nil, fmt.Errorf("invalid IPv4 format: %s", parts[0])
-	}
-
-	startOctet, err := strconv.Atoi(octets[3])
-	if err != nil {
-		return nil, fmt.Errorf("invalid start octet: %s", octets[3])
-	}
-
-	if lastOctet < startOctet || lastOctet > 255 {
-		return nil, fmt.Errorf("invalid range: %d-%d", startOctet, lastOctet)
-	}
-
-	var ips []string
-	for i := startOctet; i <= lastOctet; i++ {
-		octets[3] = strconv.Itoa(i)
-		ips = append(ips, strings.Join(octets, "."))
-	}
-
-	return ips, nil
-}
-
-// incrementIP increases the IP address by one.
-func incrementIP(ip net.IP) {
-	for j := len(ip) - 1; j >= 0; j-- {
-		ip[j]++
-		if ip[j] != 0 {
-			break
+		port, err := strconv.Atoi(testTarget[1])
+		if err != nil {
+			return nil, err
 		}
+		if !(port >= 1 && port <= 65535) {
+			return nil, errors.New("invalid port number, format 1-65535")
+		}
+
+		return &Target{IP: ip, Port: port, Encryption: false}, nil
 	}
+	if len(testTarget) == 1 {
+		ip := net.ParseIP(testTarget[0])
+		if ip == nil {
+			return nil, errors.New("invalid ip address")
+		}
+		return &Target{IP: ip, Port: defaultPort, Encryption: false}, nil
+	}
+	return nil, errors.New("target is not a valid IP, IP:PORT or filename")
 }
 
-// isNetworkOrBroadcast checks if an IP is a network or broadcast address.
-func isNetworkOrBroadcast(ip net.IP, ipNet *net.IPNet) bool {
-	if ip.Equal(ipNet.IP) {
-		return true // Network address
+// IsFileExists checks if a file exists at the given path.
+func IsFileExists(filePath string) bool {
+	_, err := os.Stat(filePath)
+	if err == nil {
+		return true // File exists
 	}
-
-	broadcast := make(net.IP, len(ip))
-	copy(broadcast, ipNet.IP)
-	for i := range broadcast {
-		broadcast[i] |= ^ipNet.Mask[i]
+	if errors.Is(err, os.ErrNotExist) {
+		return false // File does not exist
 	}
-
-	if ip.Equal(broadcast) {
-		return true // Broadcast address
-	}
-
 	return false
 }

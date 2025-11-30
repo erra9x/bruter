@@ -1,0 +1,237 @@
+// Package logger provides a configurable logging utility for CLI applications.
+// It supports multiple log levels (FATAL, INFO, DEBUG, SUCCESS) with two modes:
+// QUIET mode (minimal output) and DEBUG mode (verbose output with timestamps).
+package logger
+
+import (
+	"fmt"
+	"io"
+	"os"
+	"sync"
+	"time"
+)
+
+// Logger represents a configurable logger instance.
+type Logger struct {
+	quiet  bool
+	debug  bool
+	output io.Writer
+	mu     sync.Mutex
+}
+
+// Default logger instance for global access.
+var defaultLogger *Logger
+
+func init() {
+	// Initialize with default settings (neither quiet nor debug).
+	defaultLogger = &Logger{
+		quiet:  false,
+		debug:  false,
+		output: os.Stdout,
+	}
+}
+
+// New creates a new Logger instance with the specified configuration.
+// Returns an error if both quiet and debug are true.
+func New(quiet, debug bool) (*Logger, error) {
+	if quiet && debug {
+		return nil, fmt.Errorf("logger: cannot enable both QUIET and DEBUG modes simultaneously")
+	}
+
+	return &Logger{
+		quiet:  quiet,
+		debug:  debug,
+		output: os.Stdout,
+	}, nil
+}
+
+// Init initializes the default global logger with the specified configuration.
+// Returns an error if both quiet and debug are true.
+func Init(quiet, debug bool) error {
+	logger, err := New(quiet, debug)
+	if err != nil {
+		return err
+	}
+	defaultLogger = logger
+	return nil
+}
+
+// SetOutput sets the output destination for the logger.
+func (l *Logger) SetOutput(w io.Writer) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.output = w
+}
+
+// SetOutput sets the output destination for the default logger.
+func SetOutput(w io.Writer) {
+	defaultLogger.SetOutput(w)
+}
+
+// timestamp returns the current timestamp in a standard format.
+func timestamp() string {
+	return time.Now().Format("2006-01-02 15:04:05")
+}
+
+// Fatal logs a fatal message and exits the program.
+// In QUIET mode: prints message without prefix/timestamp.
+// In DEBUG mode: prints with timestamp and [FATAL] prefix.
+// In normal mode: prints with timestamp and [FATAL] prefix.
+func (l *Logger) Fatal(v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	msg := fmt.Sprint(v...)
+
+	if l.quiet {
+		fmt.Fprintln(l.output, msg)
+	} else {
+		fmt.Fprintf(l.output, "%s [FATAL] %s\n", timestamp(), msg)
+	}
+
+	os.Exit(1)
+}
+
+// Fatalf logs a formatted fatal message and exits the program.
+func (l *Logger) Fatalf(format string, v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	msg := fmt.Sprintf(format, v...)
+
+	if l.quiet {
+		fmt.Fprintln(l.output, msg)
+	} else {
+		fmt.Fprintf(l.output, "%s [FATAL] %s\n", timestamp(), msg)
+	}
+
+	os.Exit(1)
+}
+
+// Fatal logs a fatal message using the default logger and exits.
+func Fatal(v ...interface{}) {
+	defaultLogger.Fatal(v...)
+}
+
+// Fatalf logs a formatted fatal message using the default logger and exits.
+func Fatalf(format string, v ...interface{}) {
+	defaultLogger.Fatalf(format, v...)
+}
+
+// Info logs an informational message.
+// In QUIET mode: message is suppressed.
+// In DEBUG mode: prints with timestamp and [*] prefix.
+// In normal mode: prints with timestamp and [*] prefix.
+func (l *Logger) Info(v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.quiet {
+		return
+	}
+
+	msg := fmt.Sprint(v...)
+	fmt.Fprintf(l.output, "%s [*] %s\n", timestamp(), msg)
+}
+
+// Infof logs a formatted informational message.
+func (l *Logger) Infof(format string, v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if l.quiet {
+		return
+	}
+
+	msg := fmt.Sprintf(format, v...)
+	fmt.Fprintf(l.output, "%s [*] %s\n", timestamp(), msg)
+}
+
+// Info logs an informational message using the default logger.
+func Info(v ...interface{}) {
+	defaultLogger.Info(v...)
+}
+
+// Infof logs a formatted informational message using the default logger.
+func Infof(format string, v ...interface{}) {
+	defaultLogger.Infof(format, v...)
+}
+
+// Debug logs a debug message.
+// Only printed when DEBUG mode is enabled.
+// Prints with timestamp and [DEBUG] prefix.
+func (l *Logger) Debug(v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if !l.debug {
+		return
+	}
+
+	msg := fmt.Sprint(v...)
+	fmt.Fprintf(l.output, "%s [DEBUG] %s\n", timestamp(), msg)
+}
+
+// Debugf logs a formatted debug message.
+func (l *Logger) Debugf(format string, v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	if !l.debug {
+		return
+	}
+
+	msg := fmt.Sprintf(format, v...)
+	fmt.Fprintf(l.output, "%s [DEBUG] %s\n", timestamp(), msg)
+}
+
+// Debug logs a debug message using the default logger.
+func Debug(v ...interface{}) {
+	defaultLogger.Debug(v...)
+}
+
+// Debugf logs a formatted debug message using the default logger.
+func Debugf(format string, v ...interface{}) {
+	defaultLogger.Debugf(format, v...)
+}
+
+// Success logs a success message.
+// In QUIET mode: prints message without prefix/timestamp.
+// In DEBUG mode: prints with timestamp and [+] prefix.
+// In normal mode: prints with timestamp and [+] prefix.
+func (l *Logger) Success(v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	msg := fmt.Sprint(v...)
+
+	if l.quiet {
+		fmt.Fprintln(l.output, msg)
+	} else {
+		fmt.Fprintf(l.output, "%s [+] %s\n", timestamp(), msg)
+	}
+}
+
+// Successf logs a formatted success message.
+func (l *Logger) Successf(format string, v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+
+	msg := fmt.Sprintf(format, v...)
+
+	if l.quiet {
+		fmt.Fprintln(l.output, msg)
+	} else {
+		fmt.Fprintf(l.output, "%s [+] %s\n", timestamp(), msg)
+	}
+}
+
+// Success logs a success message using the default logger.
+func Success(v ...interface{}) {
+	defaultLogger.Success(v...)
+}
+
+// Successf logs a formatted success message using the default logger.
+func Successf(format string, v ...interface{}) {
+	defaultLogger.Successf(format, v...)
+}

@@ -50,6 +50,16 @@ Commands:
   clickhouse [<flags>] <target>
 ```
 
+Targets are specified in format `IP` or `IP:PORT`. If `PORT` is not specified, the tool uses the default one (for example: `9000` for ClickHouse). 
+
+You can also specify a file to parse. The format for targets file is shown below:  
+
+```
+192.168.0.11
+192.168.0.12:12345
+192.168.0.13:54321
+```
+
 # Installation
 
 `bruter` requires **go1.25** to install successfully.

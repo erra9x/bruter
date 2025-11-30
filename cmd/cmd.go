@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-func CreateScanner(output string, delay int, username, password string) (*scanner.Scanner, error) {
+func CreateScanner(timeout int, output string, parallel, threads, delay int, username, password string) (*scanner.Scanner, error) {
 	var outputFile *os.File
 	var passwords []string
 
@@ -38,12 +38,19 @@ func CreateScanner(output string, delay int, username, password string) (*scanne
 		passwords = []string{password}
 	}
 
-	s := scanner.Scanner{
+	options := scanner.Options{
+		Timeout:        time.Duration(timeout) * time.Second,
+		Threads:        threads,
 		Delay:          time.Duration(delay) * time.Millisecond,
 		OutputFileName: output,
 		OutputFile:     outputFile,
 		Usernames:      usernames,
 		Passwords:      passwords,
+	}
+
+	s := scanner.Scanner{
+		Opts:     &options,
+		Parallel: parallel,
 	}
 
 	return &s, nil

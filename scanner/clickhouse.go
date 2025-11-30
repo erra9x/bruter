@@ -7,42 +7,103 @@ import (
 	"fmt"
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/ClickHouse/clickhouse-go/v2/lib/driver"
-	"log"
+	"github.com/vflame6/bruter/logger"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 )
 
-func ThreadClickHouse(wg *sync.WaitGroup, mutex *sync.Mutex, outputFile *os.File, address net.IP, port int, secure bool, usernames *[]string, passwords *[]string, sleep *time.Duration) {
-	for _, password := range *passwords {
-		for _, username := range *usernames {
-			conn, err := GetClickHouseConnection(address, port, secure, username, password)
-			if err != nil {
-				time.Sleep(*sleep)
-				continue
-			}
+// ClickHouseChecker is an implementation of CheckerHandler for ClickHouse service
+// the return values are:
+// SUCCESS (bool) for test if the target is valid for bruteforce
+// ENCRYPTION (bool) for test if the target is using encryption
+// DEFAULT (bool) for test if the target has default credentials
+// ERROR (error) for connection errors
+func ClickHouseChecker(target *Target, opts *Options) (bool, bool, error) {
+	defaultUsername := "default"
+	defaultPassword := ""
+
+	// Try TLS first
+	conn, errType, err := TestClickHouseConnection(target.IP, target.Port, true, defaultUsername, defaultPassword, opts.Timeout)
+	if err == nil {
+		defer conn.Close()
+
+		logger.Successf("[clickhouse] %s:%d [%s] [%s]", target.IP, target.Port, defaultUsername, defaultPassword)
+		if opts.OutputFile != nil {
+			opts.Mutex.Lock()
+			_, _ = opts.OutputFile.WriteString(fmt.Sprintf("[clickhouse] %s:%d [%s] [%s]\n", target.IP, target.Port, defaultUsername, defaultPassword))
+			opts.Mutex.Unlock()
+		}
+		return true, true, nil
+	}
+
+	// If it's an auth error, no point trying without TLS with same credentials
+	if errType == "auth_error" {
+		return false, true, nil
+	}
+
+	// If it's a TLS error, try plaintext
+	if errType == "tls_error" {
+		logger.Debugf("failed to connect to %s:%d with TLS, trying plaintext", target.IP, target.Port)
+		conn, errType, err = TestClickHouseConnection(target.IP, target.Port, false, defaultUsername, defaultPassword, opts.Timeout)
+		if err == nil {
 			defer conn.Close()
-			err = conn.Ping(context.Background())
-			if err != nil {
-				time.Sleep(*sleep)
-				continue
+			logger.Successf("[clickhouse] %s:%d [%s] [%s]", target.IP, target.Port, defaultUsername, defaultPassword)
+			if opts.OutputFile != nil {
+				opts.Mutex.Lock()
+				_, _ = opts.OutputFile.WriteString(fmt.Sprintf("[clickhouse] %s:%d [%s] [%s]\n", target.IP, target.Port, defaultUsername, defaultPassword))
+				opts.Mutex.Unlock()
 			}
-			log.Println("[+] [clickhouse]", address, username, password)
-			if outputFile != nil {
-				mutex.Lock()
-				_, _ = outputFile.WriteString(fmt.Sprintf("[clickhouse] %s %s %s\n", address, username, password))
-				mutex.Unlock()
-			}
-			time.Sleep(*sleep)
+			return true, false, nil
+		}
+
+		if errType == "auth_error" {
+			return false, false, nil
 		}
 	}
-	wg.Done()
+
+	return false, false, fmt.Errorf("connection failed or the service is invalid: %w", err)
 }
 
-func GetClickHouseConnection(address net.IP, port int, secure bool, username, password string) (driver.Conn, error) {
+func ClickHouseHandler(wg *sync.WaitGroup, credentials <-chan *Credential, opts *Options, target *Target) {
+	defer wg.Done()
+
+	for {
+		credential, ok := <-credentials
+		if !ok {
+			break
+		}
+		logger.Debugf("trying %s:%d with credential %s:%s", target.IP, target.Port, credential.Username, credential.Password)
+		conn, err := GetClickHouseConnection(target.IP, target.Port, target.Encryption, credential.Username, credential.Password, opts.Timeout)
+		if err != nil {
+			if opts.Delay > 0 {
+				time.Sleep(opts.Delay)
+			}
+			continue
+		}
+		defer conn.Close()
+		err = conn.Ping(context.Background())
+		if err != nil {
+			if opts.Delay > 0 {
+				time.Sleep(opts.Delay)
+			}
+			continue
+		}
+		logger.Successf("[clickhouse] %s:%d [%s] [%s]", target.IP, target.Port, credential.Username, credential.Password)
+		if opts.OutputFile != nil {
+			opts.Mutex.Lock()
+			_, _ = opts.OutputFile.WriteString(fmt.Sprintf("[clickhouse] %s:%d [%s] [%s]\n", target.IP, target.Port, credential.Username, credential.Password))
+			opts.Mutex.Unlock()
+		}
+		if opts.Delay > 0 {
+			time.Sleep(opts.Delay)
+		}
+	}
+}
+
+func GetClickHouseConnection(address net.IP, port int, secure bool, username, password string, timeout time.Duration) (driver.Conn, error) {
 	addr := net.JoinHostPort(address.String(), strconv.Itoa(port))
 
 	opts := &clickhouse.Options{
@@ -52,7 +113,7 @@ func GetClickHouseConnection(address net.IP, port int, secure bool, username, pa
 			Username: username,
 			Password: password,
 		},
-		DialTimeout: 5 * time.Second,
+		DialTimeout: timeout,
 	}
 
 	if secure {
@@ -69,7 +130,7 @@ func GetClickHouseConnection(address net.IP, port int, secure bool, username, pa
 	return conn, nil
 }
 
-func TestClickHouseConnection(address net.IP, port int, secure bool, username, password string) (driver.Conn, string, error) {
+func TestClickHouseConnection(address net.IP, port int, secure bool, username, password string, timeout time.Duration) (driver.Conn, string, error) {
 	addr := net.JoinHostPort(address.String(), strconv.Itoa(port))
 
 	opts := &clickhouse.Options{
@@ -79,7 +140,7 @@ func TestClickHouseConnection(address net.IP, port int, secure bool, username, p
 			Username: username,
 			Password: password,
 		},
-		DialTimeout: 5 * time.Second,
+		DialTimeout: timeout,
 	}
 
 	if secure {
@@ -90,52 +151,21 @@ func TestClickHouseConnection(address net.IP, port int, secure bool, username, p
 
 	conn, err := clickhouse.Open(opts)
 	if err != nil {
-		return nil, classifyError(err), err
+		return nil, clickHouseErrors(err), err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	if err := conn.Ping(ctx); err != nil {
 		conn.Close()
-		return nil, classifyError(err), err
+		return nil, clickHouseErrors(err), err
 	}
 
 	return conn, "", nil
 }
 
-// ProbeClickHouse is a function to test login to ClickHouse with default credentials
-// return values are SUCCESS, TLS, error
-func ProbeClickHouse(address net.IP, port int) (success bool, secure bool, err error) {
-	// Try TLS first
-	conn, errType, err := TestClickHouseConnection(address, port, true, "default", "")
-	if err == nil {
-		defer conn.Close()
-		return true, true, nil
-	}
-
-	// If it's an auth error, no point trying without TLS with same creds
-	if errType == "auth_error" {
-		return false, true, nil
-	}
-
-	// If it's a TLS error, try plaintext
-	if errType == "tls_error" {
-		conn, errType, err = TestClickHouseConnection(address, port, false, "default", "")
-		if err == nil {
-			defer conn.Close()
-			return true, false, nil
-		}
-
-		if errType == "auth_error" {
-			return false, false, nil
-		}
-	}
-
-	return false, false, fmt.Errorf("connection failed: %w", err)
-}
-
-func classifyError(err error) string {
+func clickHouseErrors(err error) string {
 	if err == nil {
 		return "no error"
 	}
