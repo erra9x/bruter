@@ -17,9 +17,8 @@ import (
 
 // ClickHouseChecker is an implementation of CheckerHandler for ClickHouse service
 // the return values are:
-// SUCCESS (bool) for test if the target is valid for bruteforce
-// ENCRYPTION (bool) for test if the target is using encryption
 // DEFAULT (bool) for test if the target has default credentials
+// ENCRYPTION (bool) for test if the target is using encryption
 // ERROR (error) for connection errors
 func ClickHouseChecker(target *Target, opts *Options) (bool, bool, error) {
 	defaultUsername := "default"
@@ -32,9 +31,9 @@ func ClickHouseChecker(target *Target, opts *Options) (bool, bool, error) {
 
 		logger.Successf("[clickhouse] %s:%d [%s] [%s]", target.IP, target.Port, defaultUsername, defaultPassword)
 		if opts.OutputFile != nil {
-			opts.Mutex.Lock()
+			opts.FileMutex.Lock()
 			_, _ = opts.OutputFile.WriteString(fmt.Sprintf("[clickhouse] %s:%d [%s] [%s]\n", target.IP, target.Port, defaultUsername, defaultPassword))
-			opts.Mutex.Unlock()
+			opts.FileMutex.Unlock()
 		}
 		return true, true, nil
 	}
@@ -52,9 +51,9 @@ func ClickHouseChecker(target *Target, opts *Options) (bool, bool, error) {
 			defer conn.Close()
 			logger.Successf("[clickhouse] %s:%d [%s] [%s]", target.IP, target.Port, defaultUsername, defaultPassword)
 			if opts.OutputFile != nil {
-				opts.Mutex.Lock()
+				opts.FileMutex.Lock()
 				_, _ = opts.OutputFile.WriteString(fmt.Sprintf("[clickhouse] %s:%d [%s] [%s]\n", target.IP, target.Port, defaultUsername, defaultPassword))
-				opts.Mutex.Unlock()
+				opts.FileMutex.Unlock()
 			}
 			return true, false, nil
 		}
@@ -67,12 +66,17 @@ func ClickHouseChecker(target *Target, opts *Options) (bool, bool, error) {
 	return false, false, fmt.Errorf("connection failed or the service is invalid: %w", err)
 }
 
-func ClickHouseHandler(wg *sync.WaitGroup, credentials <-chan *Credential, opts *Options, target *Target) {
+// ClickHouseHandler is an implementation of CommandHandler for ClickHouse service
+func ClickHouseHandler(targetMutex *sync.Mutex, wg *sync.WaitGroup, credentials <-chan *Credential, opts *Options, target *Target) {
 	defer wg.Done()
 
 	for {
 		credential, ok := <-credentials
 		if !ok {
+			break
+		}
+		// shutdown all threads if --stop-on-success is used and password is found
+		if opts.StopOnSuccess && target.Success {
 			break
 		}
 		logger.Debugf("trying %s:%d with credential %s:%s", target.IP, target.Port, credential.Username, credential.Password)
@@ -92,10 +96,14 @@ func ClickHouseHandler(wg *sync.WaitGroup, credentials <-chan *Credential, opts 
 			continue
 		}
 		logger.Successf("[clickhouse] %s:%d [%s] [%s]", target.IP, target.Port, credential.Username, credential.Password)
+		targetMutex.Lock()
+		target.Success = true
+		targetMutex.Unlock()
+
 		if opts.OutputFile != nil {
-			opts.Mutex.Lock()
+			opts.FileMutex.Lock()
 			_, _ = opts.OutputFile.WriteString(fmt.Sprintf("[clickhouse] %s:%d [%s] [%s]\n", target.IP, target.Port, credential.Username, credential.Password))
-			opts.Mutex.Unlock()
+			opts.FileMutex.Unlock()
 		}
 		if opts.Delay > 0 {
 			time.Sleep(opts.Delay)

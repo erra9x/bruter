@@ -1,6 +1,7 @@
 package scanner
 
 import (
+	"bufio"
 	"errors"
 	"net"
 	"os"
@@ -47,4 +48,30 @@ func IsFileExists(filePath string) bool {
 		return false // File does not exist
 	}
 	return false
+}
+
+func ParseUsernames(filename string) ([]string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []string{filename}, nil
+		}
+		return nil, err
+	}
+	defer file.Close()
+
+	sc := bufio.NewScanner(file)
+	var usernames []string
+	for sc.Scan() {
+		usernames = append(usernames, sc.Text())
+	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
+	return usernames, nil
+}
+
+func CheckIfFileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil
 }

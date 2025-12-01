@@ -11,19 +11,22 @@ import (
 )
 
 var DefaultPorts = map[string]int{
+	"ftp":        21,
 	"clickhouse": 9000,
 }
 
 var CommandHandlers = map[string]CommandHandler{
+	"ftp":        FTPHandler,
 	"clickhouse": ClickHouseHandler,
 }
 
 var CheckerHandlers = map[string]CheckerHandler{
+	"ftp":        FTPChecker,
 	"clickhouse": ClickHouseChecker,
 }
 
 // CommandHandler is an interface for one bruteforcing thread
-type CommandHandler func(wg *sync.WaitGroup, credentials <-chan *Credential, opts *Options, target *Target)
+type CommandHandler func(targetMutex *sync.Mutex, wg *sync.WaitGroup, credentials <-chan *Credential, opts *Options, target *Target)
 
 // CheckerHandler is an interface for service checker function
 // the return values are:
@@ -44,22 +47,74 @@ type Options struct {
 	Timeout        time.Duration
 	Threads        int
 	Delay          time.Duration
+	StopOnSuccess  bool
 	OutputFileName string
 	OutputFile     *os.File
 	Usernames      []string
 	Passwords      []string
-	Mutex          sync.Mutex
+	FileMutex      sync.Mutex
 }
 
 type Target struct {
 	IP         net.IP
 	Port       int
 	Encryption bool
+	Success    bool
 }
 
 type Credential struct {
 	Username string
 	Password string
+}
+
+func NewScanner(timeout int, output string, parallel, threads, delay int, stopOnSuccess bool, username, password string) (*Scanner, error) {
+	var outputFile *os.File
+	var passwords []string
+
+	if output != "" {
+		var err error
+		outputFile, err = os.Create(output)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	usernames, err := ParseUsernames(username)
+	if err != nil {
+		return nil, err
+	}
+
+	if CheckIfFileExists(password) {
+		passwordFile, err := os.Open(password)
+		if err != nil {
+			return nil, err
+		}
+		defer passwordFile.Close()
+		sc := bufio.NewScanner(passwordFile)
+		for sc.Scan() {
+			passwords = append(passwords, sc.Text())
+		}
+	} else {
+		passwords = []string{password}
+	}
+
+	options := Options{
+		Timeout:        time.Duration(timeout) * time.Second,
+		Threads:        threads,
+		Delay:          time.Duration(delay) * time.Millisecond,
+		StopOnSuccess:  stopOnSuccess,
+		OutputFileName: output,
+		OutputFile:     outputFile,
+		Usernames:      usernames,
+		Passwords:      passwords,
+	}
+
+	s := Scanner{
+		Opts:     &options,
+		Parallel: parallel,
+	}
+
+	return &s, nil
 }
 
 func (s *Scanner) Stop() {
@@ -99,10 +154,9 @@ func (s *Scanner) Run(command, targets string) error {
 				logger.Debug(err)
 				continue
 			}
-			if encryption {
-				target.Encryption = true
-			}
+			target.Encryption = encryption
 			if defaultCreds {
+				target.Success = defaultCreds
 				continue
 			}
 
@@ -143,7 +197,8 @@ func (s *Scanner) ThreadedHandler(wg *sync.WaitGroup, targets <-chan *Target, ha
 		var threadWg sync.WaitGroup
 		for i := 0; i < s.Opts.Threads; i++ {
 			threadWg.Add(1)
-			go handler(&threadWg, credentials, s.Opts, target)
+			var threadMutex sync.Mutex
+			go handler(&threadMutex, &threadWg, credentials, s.Opts, target)
 		}
 		threadWg.Wait()
 	}
