@@ -62,7 +62,7 @@ func PrintBanner() {
 
 func main() {
 	// VERSION should be linked to actual tag
-	VERSION := "0.0.5"
+	VERSION := "0.0.6"
 
 	// kingpin settings
 	app.Version(VERSION)
@@ -70,19 +70,31 @@ func main() {
 	app.HelpFlag.Short('h')
 	app.UsageTemplate(CustomUsageTemplate)
 
-	// Parse into context first (doesn't validate required flags yet)
+	// Parse into context first
 	ctx, err := app.ParseContext(os.Args[1:])
 	if err != nil {
 		app.FatalUsage(err.Error())
 	}
 
-	// Check if no command was selected
+	// Check if --version was requested
 	if ctx.SelectedCommand == nil {
+		// Check for --version or --help flags
+		for _, elem := range ctx.Elements {
+			if flag, ok := elem.Clause.(*kingpin.FlagClause); ok {
+				if flag.Model().Name == "version" || flag.Model().Name == "help" {
+					// Let kingpin handle --version or --help
+					app.Parse(os.Args[1:])
+					os.Exit(0)
+				}
+			}
+		}
+
+		// No command and no --version/--help, show usage
 		app.Usage(os.Args[1:])
 		os.Exit(0)
 	}
 
-	// parse options
+	// Now do the full parse which validates required flags
 	command := kingpin.MustParse(app.Parse(os.Args[1:]))
 
 	if err := logger.Init(*quietFlag, *debugFlag); err != nil {
