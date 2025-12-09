@@ -15,7 +15,7 @@ const AUTHOR = "vflame6"
 const VERSION = "v0.0.6"
 
 // BANNER format string. It is used in PrintBanner function with VERSION
-const BANNER = "    __               __           \n   / /_  _______  __/ /____  _____\n  / __ \\/ ___/ / / / __/ _ \\/ ___/\n / /_/ / /  / /_/ / /_/  __/ /    \n/_.___/_/   \\__,_/\\__/\\___/_/     %s\n                                  \n"
+const BANNER = "    __               __           \n   / /_  _______  __/ /____  _____\n  / __ \\/ ___/ / / / __/ _ \\/ ___/\n / /_/ / /  / /_/ / /_/  __/ /    \n/_.___/_/   \\__,_/\\__/\\___/_/      %s\n                                  \n"
 
 // program commands, flags and arguments
 var (
@@ -46,6 +46,8 @@ var (
 
 	// clickhouse
 	clickhouseCommand = app.Command("clickhouse", "ClickHouse module")
+	// etcd
+	etcdCommand = app.Command("etcd", "Etcd module")
 	// ftp
 	ftpCommand = app.Command("ftp", "FTP module")
 	// mongodb

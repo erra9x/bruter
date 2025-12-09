@@ -25,7 +25,6 @@ func FTPChecker(target *Target, opts *Options) (bool, bool, error) {
 	conn, err := GetFTPConnection(target.IP, target.Port, true, opts.Timeout)
 	if err == nil {
 		secure = true
-		logger.Debugf("trying default credentials on %s:%d", target.IP, target.Port)
 		err = conn.Login(defaultUsername, defaultPassword)
 		if err == nil {
 			RegisterSuccess(opts.OutputFile, &opts.FileMutex, opts.Command, target, defaultUsername, defaultPassword)
@@ -37,7 +36,6 @@ func FTPChecker(target *Target, opts *Options) (bool, bool, error) {
 		// connect via plaintext FTP
 		conn, err := GetFTPConnection(target.IP, target.Port, false, opts.Timeout)
 		if err == nil {
-			logger.Debugf("trying default credentials on %s:%d", target.IP, target.Port)
 			err = conn.Login(defaultUsername, defaultPassword)
 			if err == nil {
 				RegisterSuccess(opts.OutputFile, &opts.FileMutex, opts.Command, target, defaultUsername, defaultPassword)

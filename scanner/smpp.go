@@ -52,8 +52,6 @@ func SMPPChecker(target *Target, opts *Options) (bool, bool, error) {
 	defaultUsername := "smppclient1"
 	defaultPassword := "password"
 
-	logger.Debugf("trying default credentials on %s:%d", target.IP, target.Port)
-
 	// Step 1: Try TLS connection
 	session, err := GetSMPPConnection(target.IP, target.Port, true, opts.Timeout, defaultUsername, defaultPassword)
 

@@ -14,6 +14,7 @@ import (
 // Commands stores all available services for bruteforcing
 var Commands = map[string]Command{
 	"clickhouse": {9000, ClickHouseHandler, ClickHouseChecker},
+	"etcd":       {2379, EtcdHandler, EtcdChecker},
 	"ftp":        {21, FTPHandler, FTPChecker},
 	"mongo":      {27017, MongoHandler, MongoChecker},
 	"smpp":       {2775, SMPPHandler, SMPPChecker},
@@ -181,6 +182,7 @@ func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, targets <-chan *Target, ch
 		}
 
 		// check with checker
+		logger.Debugf("(%s:%d) trying default credentials", target.IP, target.Port)
 		defaultCreds, encryption, err := checker(target, s.Opts)
 		if err != nil {
 			logger.Debug(err)

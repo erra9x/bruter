@@ -20,7 +20,6 @@ func MongoChecker(target *Target, opts *Options) (bool, bool, error) {
 	defaultUsername := ""
 	defaultPassword := ""
 
-	logger.Debugf("trying default credentials on %s:%d", target.IP, target.Port)
 	// Try TLS first
 	client, err := GetDefaultMongoConnection(target.IP, target.Port, true, opts.Timeout)
 	if err == nil {
