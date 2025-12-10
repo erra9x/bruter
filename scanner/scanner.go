@@ -59,7 +59,7 @@ type Options struct {
 	OutputFileName string
 	OutputFile     *os.File
 	Usernames      []string
-	Passwords      []string
+	Passwords      string
 	FileMutex      sync.Mutex
 }
 
@@ -79,7 +79,6 @@ type Credential struct {
 
 func NewScanner(timeout int, output string, parallel, threads, delay int, stopOnSuccess bool, retries int, username, password string) (*Scanner, error) {
 	var outputFile *os.File
-	var passwords []string
 
 	if output != "" {
 		var err error
@@ -94,20 +93,6 @@ func NewScanner(timeout int, output string, parallel, threads, delay int, stopOn
 		return nil, err
 	}
 
-	if CheckIfFileExists(password) {
-		passwordFile, err := os.Open(password)
-		if err != nil {
-			return nil, err
-		}
-		defer passwordFile.Close()
-		sc := bufio.NewScanner(passwordFile)
-		for sc.Scan() {
-			passwords = append(passwords, sc.Text())
-		}
-	} else {
-		passwords = []string{password}
-	}
-
 	options := Options{
 		Timeout:        time.Duration(timeout) * time.Second,
 		Threads:        threads,
@@ -117,7 +102,7 @@ func NewScanner(timeout int, output string, parallel, threads, delay int, stopOn
 		OutputFileName: output,
 		OutputFile:     outputFile,
 		Usernames:      usernames,
-		Passwords:      passwords,
+		Passwords:      password,
 	}
 
 	s := Scanner{
@@ -200,11 +185,35 @@ func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, targets <-chan *Target, ch
 
 		credentials := make(chan *Credential, 256)
 		go func() {
-			for _, password := range s.Opts.Passwords {
+			// if passwords is a file, iterate over it
+			if CheckIfFileExists(s.Opts.Passwords) {
+				file, err := os.Open(s.Opts.Passwords)
+				if err != nil {
+					logger.Infof("failed to open file %s: %v", s.Opts.Passwords, err)
+					return
+				}
+				defer file.Close()
+
+				scanner := bufio.NewScanner(file)
+				for scanner.Scan() {
+					line := scanner.Text()
+					if line == "" {
+						continue
+					}
+					for _, username := range s.Opts.Usernames {
+						credentials <- &Credential{Username: username, Password: line}
+					}
+				}
+				if err := scanner.Err(); err != nil {
+					logger.Infof("error reading file %s: %v", s.Opts.Passwords, err)
+				}
+			} else {
+				// if passwords is not a file, use it as a password
 				for _, username := range s.Opts.Usernames {
-					credentials <- &Credential{Username: username, Password: password}
+					credentials <- &Credential{Username: username, Password: s.Opts.Passwords}
 				}
 			}
+
 			close(credentials)
 		}()
 
