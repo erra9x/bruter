@@ -1,0 +1,5 @@
+root
+default
+admin
+ftpuser
+smppclient1

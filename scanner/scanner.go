@@ -13,6 +13,7 @@ import (
 
 // Commands stores all available services for bruteforcing
 var Commands = map[string]Command{
+	"amqp":       {5672, AMQPHandler, AMQPChecker},
 	"clickhouse": {9000, ClickHouseHandler, ClickHouseChecker},
 	"etcd":       {2379, EtcdHandler, EtcdChecker},
 	"ftp":        {21, FTPHandler, FTPChecker},

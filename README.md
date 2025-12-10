@@ -20,6 +20,7 @@
 
 Available modules:
 
+- `amqp`
 - `clickhouse`
 - `etcd`
 - `ftp`
@@ -51,16 +52,16 @@ Flags:
   -d, --delay=0                Delay in millisecond between each attempt.
   Will always use single thread if set
   --timeout=5              Connection timeout in seconds
-  --[no-]stop-on-success   Stop bruteforcing host on first success
-  --max-retries=30         Number of connection errors to stop bruteforcing
-  host. Specify 0 to disable this behavior
+  --[no-]stop-on-success   Stop bruteforce the host on first success
+  --max-retries=30         Number of connection errors to stop bruteforce
+  the host. Specify 0 to disable this behavior
   -t, --target=TARGET          Target host or file with targets. Format host or
   host:port, one per line
   -u, --username=USERNAME      Username or file with usernames
   -p, --password=PASSWORD      Password or file with passwords
   --[no-]version           Show application version.
 
-Commands: clickhouse etcd ftp mongo smpp vault
+Commands: amqp clickhouse etcd ftp mongo smpp vault
 ```
 
 Targets are specified in format `IP` or `IP:PORT`. If `PORT` is not specified, the tool uses the default one (for example: `9000` for ClickHouse). 

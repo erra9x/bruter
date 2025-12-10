@@ -25,6 +25,7 @@ require (
 	github.com/orcaman/concurrent-map/v2 v2.0.1 // indirect
 	github.com/paulmach/orb v0.12.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
+	github.com/rabbitmq/amqp091-go v1.10.0 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/shopspring/decimal v1.4.0 // indirect
 	github.com/xdg-go/pbkdf2 v1.0.0 // indirect

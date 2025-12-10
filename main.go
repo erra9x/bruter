@@ -31,8 +31,8 @@ var (
 	threadsFlag       = app.Flag("concurrent-threads", "Number of parallel threads per target").Short('c').Default("10").Int()
 	delayFlag         = app.Flag("delay", "Delay in millisecond between each attempt. Will always use single thread if set").Short('d').Default("0").Int()
 	timeoutFlag       = app.Flag("timeout", "Connection timeout in seconds").Default("5").Int()
-	stopOnSuccessFlag = app.Flag("stop-on-success", "Stop bruteforcing host on first success").Default("false").Bool()
-	retryFlag         = app.Flag("max-retries", "Number of connection errors to stop bruteforcing host. Specify 0 to disable this behavior").Default("30").Int()
+	stopOnSuccessFlag = app.Flag("stop-on-success", "Stop bruteforce the host on first success").Default("false").Bool()
+	retryFlag         = app.Flag("max-retries", "Number of connection errors to stop bruteforce the host. Specify 0 to disable this behavior").Default("30").Int()
 
 	// targets
 	targetFlag = app.Flag("target", "Target host or file with targets. Format host or host:port, one per line").Short('t').Required().String()
@@ -44,10 +44,12 @@ var (
 	// available modules
 	// sort alphabetically
 
+	// amqp
+	amqpCommand = app.Command("amqp", "AMQP module")
 	// clickhouse
 	clickhouseCommand = app.Command("clickhouse", "ClickHouse module")
 	// etcd
-	etcdCommand = app.Command("etcd", "Etcd module")
+	etcdCommand = app.Command("etcd", "etcd module")
 	// ftp
 	ftpCommand = app.Command("ftp", "FTP module")
 	// mongodb
@@ -55,7 +57,7 @@ var (
 	// smpp
 	smppCommand = app.Command("smpp", "SMPP module")
 	// vault
-	vaultCommand = app.Command("vault", "HashiCorp Vault Userpass module")
+	vaultCommand = app.Command("vault", "HashiCorp Vault userpass module")
 )
 
 // CustomUsageTemplate is a template for kingpin's help menu
