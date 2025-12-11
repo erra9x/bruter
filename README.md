@@ -55,6 +55,10 @@ Flags:
   --[no-]stop-on-success   Stop bruteforce the host on first success
   --max-retries=30         Number of connection errors to stop bruteforce
   the host. Specify 0 to disable this behavior
+  --proxy=""               SOCKS-proxy address to use for connection in
+  format IP:PORT
+  --proxy-auth=""          Proxy username and password in format
+  username:password
   -t, --target=TARGET          Target host or file with targets. Format host or
   host:port, one per line
   -u, --username=USERNAME      Username or file with usernames
