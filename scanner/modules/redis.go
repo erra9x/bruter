@@ -1,13 +1,12 @@
 package modules
 
 import (
-	"database/sql"
+	"context"
 	"fmt"
-	"github.com/lib/pq"
+	"github.com/redis/go-redis/v9"
 	"github.com/vflame6/bruter/logger"
 	"github.com/vflame6/bruter/utils"
 	"net"
-	"strings"
 	"time"
 )
 
@@ -16,9 +15,9 @@ func RedisChecker(target net.IP, port int, timeout time.Duration, dialer *utils.
 	var err error
 
 	// try to connect with TLS
-	_, err = GetPostgresConnection(target, port, true, dialer, defaultUsername, defaultPassword)
+	_, err = GetRedisConnection(target, port, true, timeout, dialer, defaultUsername, defaultPassword)
 	if err != nil {
-		if strings.Contains(err.Error(), "pq: password authentication failed for user") {
+		if redis.IsAuthError(err) {
 			// connected but authentication error
 			return false, true, nil
 		}
@@ -30,9 +29,9 @@ func RedisChecker(target net.IP, port int, timeout time.Duration, dialer *utils.
 
 	// try without TLS
 	logger.Debugf("failed to connect to %s:%d with encryption, trying plaintext", target, port)
-	_, err = GetPostgresConnection(target, port, false, dialer, defaultUsername, defaultPassword)
+	_, err = GetRedisConnection(target, port, false, timeout, dialer, defaultUsername, defaultPassword)
 	if err != nil {
-		if strings.Contains(err.Error(), "pq: password authentication failed for user") {
+		if redis.IsAuthError(err) {
 			// connected, but authentication error
 			return false, false, nil
 		}
@@ -45,9 +44,9 @@ func RedisChecker(target net.IP, port int, timeout time.Duration, dialer *utils.
 
 // RedisHandler is an implementation of CommandHandler for Redis service
 func RedisHandler(target net.IP, port int, encryption bool, timeout time.Duration, dialer *utils.ProxyAwareDialer, username, password string) (bool, bool) {
-	_, err := GetPostgresConnection(target, port, encryption, dialer, username, password)
+	_, err := GetRedisConnection(target, port, encryption, timeout, dialer, username, password)
 	if err != nil {
-		if strings.Contains(err.Error(), "pq: password authentication failed for user") {
+		if redis.IsAuthError(err) {
 			// authentication error
 			return true, false
 		}
@@ -55,37 +54,37 @@ func RedisHandler(target net.IP, port int, encryption bool, timeout time.Duratio
 		return false, false
 	}
 
+	// connected and authenticated
 	return true, true
 }
 
-func GetRedisConnection(target net.IP, port int, encryption bool, d *utils.ProxyAwareDialer, username, password string) (*sql.DB, error) {
-	// Build connection string
-	// sslmode is set based on encryption, but actual TLS is handled by our dialer
-	sslmode := "disable"
-	if encryption {
-		sslmode = "require"
+func GetRedisConnection(target net.IP, port int, encryption bool, timeout time.Duration, d *utils.ProxyAwareDialer, username, password string) (*redis.Client, error) {
+	addr := fmt.Sprintf("%s:%d", target.String(), port)
+
+	// Create the Redis client options
+	options := &redis.Options{
+		Addr:     addr,          // Redis server address
+		Dialer:   d.DialContext, // Set the custom dialer function
+		DB:       0,
+		Username: username,
 	}
 
-	connStr := fmt.Sprintf(
-		"host=%s port=%d user=%s password=%s dbname=postgres sslmode=%s",
-		target, port, username, password, sslmode,
-	)
+	if password != "" {
+		options.Password = password
+	}
 
-	connector, err := pq.NewConnector(connStr)
-	if err != nil {
+	if encryption {
+		options.TLSConfig = utils.GetTLSConfig()
+	}
+
+	client := redis.NewClient(options)
+
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel() // Release resources when main returns
+
+	if err := client.Ping(ctx).Err(); err != nil {
 		return nil, err
 	}
 
-	// Use TLS wrapper or plain dialer based on encryption flag
-	if encryption {
-		connector.Dialer(&utils.TLSDialerWrapper{Dialer: d})
-	} else {
-		connector.Dialer(d)
-	}
-
-	db := sql.OpenDB(connector)
-
-	err = db.Ping()
-
-	return db, err
+	return client, nil
 }
