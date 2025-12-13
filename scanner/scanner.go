@@ -16,7 +16,8 @@ const BufferMultiplier = 4
 
 type Scanner struct {
 	Opts    *Options
-	Targets chan *Target
+	Targets chan *modules.Target
+	Results chan *Result
 }
 
 type Options struct {
@@ -35,19 +36,12 @@ type Options struct {
 	UserAgent           string                  // --user-agent
 	OutputFileName      string
 	OutputFile          *os.File
-	FileMutex           sync.Mutex
 }
 
-type Target struct {
-	IP         net.IP
-	Port       int
-	Encryption bool
-	Success    bool
-	Retries    int
-	Mutex      sync.Mutex
-}
-
-type Credential struct {
+type Result struct {
+	Command  string
+	IP       net.IP
+	Port     int
 	Username string
 	Password string
 }
@@ -82,11 +76,13 @@ func NewScanner(options *Options) (*Scanner, error) {
 		options.OutputFile = outputFile
 	}
 
-	parallelTargets := make(chan *Target, options.Parallel*BufferMultiplier)
+	parallelTargets := make(chan *modules.Target, options.Parallel*BufferMultiplier)
+	results := make(chan *Result, options.Parallel*BufferMultiplier)
 
 	s := Scanner{
-		Targets: parallelTargets,
 		Opts:    options,
+		Targets: parallelTargets,
+		Results: results,
 	}
 
 	return &s, nil
@@ -106,7 +102,6 @@ func (s *Scanner) Run(command, targets string) error {
 	if !ok {
 		return errors.New("invalid command")
 	}
-
 	s.Opts.Command = command
 
 	// check if delay is set
@@ -138,12 +133,14 @@ func (s *Scanner) Run(command, targets string) error {
 
 		go s.ParallelHandler(&parallelWg, &c)
 	}
+	go GetResults(s.Results, s.Opts.OutputFile)
 	parallelWg.Wait()
+	close(s.Results)
 
 	return nil
 }
 
-func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, command *modules.Module) {
+func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, module *modules.Module) {
 	defer wg.Done()
 
 	for {
@@ -154,17 +151,42 @@ func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, command *modules.Module) {
 
 		// check with checker
 		logger.Debugf("trying default credentials on %s:%d", target.IP, target.Port)
-		defaultCreds, encryption, err := command.Checker(target.IP, target.Port, s.Opts.Timeout, s.Opts.ProxyDialer, command.DefaultUsername, command.DefaultPassword)
-		if err != nil {
-			logger.Debug(err)
-			continue
+		defaultCredential := &modules.Credential{
+			Username: module.DefaultUsername,
+			Password: module.DefaultPassword,
+		}
+		// try with encryption first
+		// Encryption value in target is true by default exactly for that check
+		isSuccess, err := module.Handler(s.Opts.ProxyDialer, s.Opts.Timeout, target, defaultCredential)
+		if err == nil {
+			// no error indicates successful connection
+			if isSuccess {
+				target.Success = true
+			}
+		} else {
+			// if failed, try without encryption
+			logger.Debugf("failed to connect to %s:%d with encryption, trying plaintext", target.IP, target.Port)
+			target.Encryption = false
+			isSuccess, err = module.Handler(s.Opts.ProxyDialer, s.Opts.Timeout, target, defaultCredential)
+			if err == nil {
+				if isSuccess {
+					target.Success = true
+				}
+			} else {
+				logger.Debugf("failed to connect to %s:%d: %v", target.IP, target.Port, err)
+				continue
+			}
 		}
 
-		// assign if encryption is used
-		target.Encryption = encryption
-
-		if defaultCreds {
-			RegisterSuccess(s.Opts.OutputFile, &s.Opts.FileMutex, s.Opts.Command, target, command.DefaultUsername, command.DefaultPassword)
+		// if succeeded, send to results channel
+		if target.Success {
+			s.Results <- &Result{
+				Command:  s.Opts.Command,
+				IP:       target.IP,
+				Port:     target.Port,
+				Username: module.DefaultUsername,
+				Password: module.DefaultPassword,
+			}
 			// skip target if default credentials are found and --stop-on-success is enabled
 			if s.Opts.StopOnSuccess {
 				continue
@@ -176,15 +198,66 @@ func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, command *modules.Module) {
 			time.Sleep(s.Opts.Delay)
 		}
 
-		credentials := make(chan *Credential, s.Opts.Threads*BufferMultiplier)
-
+		// send credentials to threads
+		credentials := make(chan *modules.Credential, s.Opts.Threads*BufferMultiplier)
 		go SendCredentials(credentials, s.Opts.Usernames, s.Opts.Passwords)
 
+		// run threads
 		var threadWg sync.WaitGroup
 		for i := 0; i < s.Opts.Threads; i++ {
 			threadWg.Add(1)
-			go ThreadHandler(command.Handler, &threadWg, credentials, s.Opts, target)
+			go s.ThreadHandler(&threadWg, credentials, module.Handler, target)
 		}
 		threadWg.Wait()
+	}
+}
+
+func (s *Scanner) ThreadHandler(wg *sync.WaitGroup, credentials <-chan *modules.Credential, handler modules.ModuleHandler, target *modules.Target) {
+	defer wg.Done()
+
+	for {
+		credential, ok := <-credentials
+		if !ok {
+			break
+		}
+		// shutdown all threads if --stop-on-success is used and password is found
+		if s.Opts.StopOnSuccess && target.Success {
+			break
+		}
+		// shutdown all threads if number of max retries exceeded
+		if s.Opts.Retries > 0 && target.Retries >= s.Opts.Retries {
+			break
+		}
+
+		logger.Debugf("trying %s:%s on %s:%d", credential.Username, credential.Password, target.IP, target.Port)
+		// ignore error here because it is used on initial check with default credentials
+		isSuccess, err := handler(s.Opts.ProxyDialer, s.Opts.Timeout, target, credential)
+
+		if err != nil && s.Opts.Retries > 0 {
+			target.Mutex.Lock()
+			target.Retries++
+			if target.Retries == s.Opts.Retries {
+				logger.Infof("exceeded number of max retries on %s:%d, probably banned by the target", target.IP, target.Port)
+			}
+			target.Mutex.Unlock()
+		}
+
+		if isSuccess {
+			target.Mutex.Lock()
+			target.Success = true
+			target.Mutex.Unlock()
+
+			s.Results <- &Result{
+				Command:  s.Opts.Command,
+				IP:       target.IP,
+				Port:     target.Port,
+				Username: credential.Username,
+				Password: credential.Password,
+			}
+		}
+
+		if s.Opts.Delay > 0 {
+			time.Sleep(s.Opts.Delay)
+		}
 	}
 }

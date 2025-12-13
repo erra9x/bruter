@@ -7,135 +7,30 @@ import (
 	"github.com/linxGnu/gosmpp"
 	"github.com/linxGnu/gosmpp/data"
 	"github.com/linxGnu/gosmpp/pdu"
-	"github.com/vflame6/bruter/logger"
 	"github.com/vflame6/bruter/utils"
 	"net"
 	"strings"
 	"time"
 )
 
-// SMPPErrTLS represents a TLS-specific error (handshake failure, certificate issues).
-var SMPPErrTLS = errors.New("TLS error")
-
 // SMPPErrAuth represents an authentication error (invalid credentials).
 var SMPPErrAuth = errors.New("authentication error")
 
-// SMPPErrConnection represents a network/connection error.
-var SMPPErrConnection = errors.New("connection error")
-
-// ============================================================================
-// SMPPChecker - Main checker function
-// ============================================================================
-
-// SMPPChecker checks SMPP server availability and credential validity.
-//
-// The checker first attempts a TLS connection. If TLS fails (not a network error),
-// it falls back to a non-TLS connection.
-//
-// Parameters:
-//   - target: IP address of the SMPP server
-//   - port: Port number of the SMPP server
-//   - username: SMPP SystemID for authentication
-//   - password: SMPP password for authentication
-//
-// Returns:
-//   - success (bool): true if credentials are valid, false if invalid
-//   - tls (bool): true if TLS connection was used, false if plain TCP
-//   - err (error): non-nil only for connection errors (not auth/TLS errors)
-//
-// Examples:
-//   - (true, true, nil)   - Valid credentials over TLS
-//   - (true, false, nil)  - Valid credentials over plain TCP (TLS failed)
-//   - (false, true, nil)  - Invalid credentials, TLS worked
-//   - (false, false, nil) - Invalid credentials, TLS failed, plain TCP used
-//   - (false, false, err) - Connection error (server unreachable, etc.)
-func SMPPChecker(target net.IP, port int, timeout time.Duration, dialer *utils.ProxyAwareDialer, defaultUsername, defaultPassword string) (bool, bool, error) {
-	// Step 1: Try TLS connection
-	session, err := GetSMPPConnection(target, port, true, timeout, dialer, defaultUsername, defaultPassword)
-
-	if err == nil {
-		// TLS connection successful, credentials valid
-		_ = session.Close()
-		return true, true, nil
-	}
-
-	// Analyze the error
-	if errors.Is(err, SMPPErrAuth) {
-		// TLS worked, but authentication failed
-		return false, true, nil
-	}
-
-	// Try non-TLS as fallback
-	logger.Debugf("failed to connect to %s:%d with TLS, trying plaintext", target, port)
-	session, err = GetSMPPConnection(target, port, false, timeout, dialer, defaultUsername, defaultPassword)
-
-	if err == nil {
-		// Non-TLS connection successful, credentials valid
-		_ = session.Close()
-		return true, false, nil
-	}
-
-	// Analyze the error
-	if errors.Is(err, SMPPErrAuth) {
-		// Authentication failed
-		return false, false, nil
-	}
-
-	// Connection error
-	return false, false, fmt.Errorf("connection failed: %w", err)
-}
-
 // SMPPHandler is an implementation of ModuleHandler for SMPP service
-// the return values are:
-// IsConnected (bool) to test if connection to the target is successful
-// IsAuthenticated (bool) to test if authentication is successful
-func SMPPHandler(target net.IP, port int, encryption bool, timeout time.Duration, dialer *utils.ProxyAwareDialer, username, password string) (bool, bool) {
-	session, err := GetSMPPConnection(target, port, encryption, timeout, dialer, username, password)
-	if err != nil {
-		if !errors.Is(err, SMPPErrAuth) {
-			// connection error
-			return false, false
-		}
-		// connected but not authenticated
-		return true, false
-	}
-	_ = session.Close()
-
-	// connected and authenticated
-	return true, true
-}
-
-// ============================================================================
-// GetSMPPConnection - Establishes SMPP session
-// ============================================================================
-
-// GetSMPPConnection establishes an SMPP session with the specified parameters.
-//
-// Parameters:
-//   - target: IP address of the SMPP server
-//   - port: Port number of the SMPP server
-//   - secure: If true, use TLS connection (with InsecureSkipVerify: true)
-//   - timeout: Connection timeout duration
-//   - username: SMPP SystemID for authentication
-//   - password: SMPP password for authentication
-//
-// Returns:
-//   - *gosmpp.Session: Established session (caller must close it)
-//   - error: Connection or authentication error
-func GetSMPPConnection(target net.IP, port int, secure bool, timeout time.Duration, d *utils.ProxyAwareDialer, username, password string) (*gosmpp.Session, error) {
-	addr := fmt.Sprintf("%s:%d", target.String(), port)
+func SMPPHandler(d *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+	addr := fmt.Sprintf("%s:%d", target.IP.String(), target.Port)
 
 	// Create authentication config
 	auth := gosmpp.Auth{
 		SMSC:       addr,
-		SystemID:   username,
-		Password:   password,
+		SystemID:   credential.Username,
+		Password:   credential.Password,
 		SystemType: "",
 	}
 
 	// Create dialer based on secure flag
 	var dialer gosmpp.Dialer
-	if secure {
+	if target.Encryption {
 		dialer = createTLSSMPPDialer(d)
 	} else {
 		dialer = createNonTLSSMPPDialer(d)
@@ -164,10 +59,18 @@ func GetSMPPConnection(target net.IP, port int, secure bool, timeout time.Durati
 	)
 
 	if err != nil {
-		return nil, classifySMPPError(err, secure)
+		errType := classifySMPPError(err)
+		// check for authentication error
+		if errors.Is(errType, SMPPErrAuth) {
+			return false, nil
+		}
+		// connection error
+		return false, err
 	}
 
-	return session, nil
+	// successful connection and authentication
+	_ = session.Close()
+	return true, nil
 }
 
 // createTLSSMPPDialer creates a TLS dialer with InsecureSkipVerify enabled.
@@ -189,7 +92,7 @@ func createTLSSMPPDialer(d *utils.ProxyAwareDialer) gosmpp.Dialer {
 
 		if err := tlsConn.Handshake(); err != nil {
 			_ = conn.Close()
-			return nil, fmt.Errorf("%w: %v", SMPPErrTLS, err)
+			return nil, err
 		}
 
 		if err := tlsConn.SetDeadline(time.Time{}); err != nil {
@@ -209,75 +112,22 @@ func createNonTLSSMPPDialer(d *utils.ProxyAwareDialer) gosmpp.Dialer {
 }
 
 // classifySMPPError categorizes the error into TLS, Auth, or Connection error.
-func classifySMPPError(err error, wasTLS bool) error {
+func classifySMPPError(err error) error {
 	if err == nil {
 		return nil
 	}
 
-	errStr := err.Error()
-
-	// Check for TLS errors
-	if wasTLS && isTLSError(err) {
-		return fmt.Errorf("%w: %v", SMPPErrTLS, err)
-	}
-
 	// Check for authentication errors (SMPP bind errors)
-	if isAuthError(err) {
+	if isSMPPAuthError(err) {
 		return fmt.Errorf("%w: %v", SMPPErrAuth, err)
 	}
 
-	// Check error message for TLS indicators
-	if wasTLS && containsTLSErrorIndicator(errStr) {
-		return fmt.Errorf("%w: %v", SMPPErrTLS, err)
-	}
-
 	// Default to connection error
-	return fmt.Errorf("%w: %v", SMPPErrConnection, err)
+	return err
 }
 
-// isTLSError checks if the error is TLS-related.
-func isTLSError(err error) bool {
-	// Check if error already wrapped as TLS error
-	if errors.Is(err, SMPPErrTLS) {
-		return true
-	}
-
-	// Check for TLS record/alert errors
-	var tlsRecordErr tls.RecordHeaderError
-	if errors.As(err, &tlsRecordErr) {
-		return true
-	}
-
-	return false
-}
-
-// containsTLSErrorIndicator checks error message for TLS-related keywords.
-func containsTLSErrorIndicator(errStr string) bool {
-	tlsIndicators := []string{
-		"tls:",
-		"TLS",
-		"certificate",
-		"handshake",
-		"x509",
-		"ssl",
-		"SSL",
-		"first record does not look like a TLS handshake",
-		"oversized record",
-		"alert",
-	}
-
-	errLower := strings.ToLower(errStr)
-	for _, indicator := range tlsIndicators {
-		if strings.Contains(errLower, strings.ToLower(indicator)) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// isAuthError checks if the error is authentication-related.
-func isAuthError(err error) bool {
+// isSMPPAuthError checks if the error is authentication-related.
+func isSMPPAuthError(err error) bool {
 	// Check for gosmpp.BindError
 	var bindErr gosmpp.BindError
 	if errors.As(err, &bindErr) {
@@ -295,7 +145,7 @@ func isAuthError(err error) bool {
 
 	// Check error message for auth indicators
 	errStr := strings.ToLower(err.Error())
-	authIndicators := []string{
+	if utils.ContainsAny(errStr,
 		"invalid password",
 		"invalid system",
 		"authentication",
@@ -305,12 +155,8 @@ func isAuthError(err error) bool {
 		"command status: [13]", // ESME_RBINDFAIL
 		"command status: [14]", // ESME_RINVPASWD
 		"command status: [15]", // ESME_RINVSYSID
-	}
-
-	for _, indicator := range authIndicators {
-		if strings.Contains(errStr, indicator) {
-			return true
-		}
+	) {
+		return true
 	}
 
 	return false

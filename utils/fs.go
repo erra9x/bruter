@@ -1,8 +1,10 @@
 package utils
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
+	"github.com/vflame6/bruter/logger"
 	"io"
 	"os"
 )
@@ -52,4 +54,39 @@ func CountLinesInFile(filename string) (int, error) {
 	}
 
 	return count, nil
+}
+
+// ParseFileByLine is a function to read file in iterations
+func ParseFileByLine(filename string) <-chan string {
+	out := make(chan string)
+
+	go func() {
+		defer close(out)
+
+		// if filename is a real file, parse it
+		if IsFileExists(filename) {
+			f, err := os.Open(filename)
+			if err != nil {
+				return
+			}
+			defer f.Close()
+
+			scanner := bufio.NewScanner(f)
+			for scanner.Scan() {
+				line := scanner.Text()
+				if line == "" {
+					continue
+				}
+				out <- line
+			}
+			if err := scanner.Err(); err != nil {
+				logger.Debugf("error while reading file %s: %v", filename, err)
+			}
+		} else {
+			// if filename is not a file, send it as a line
+			out <- filename
+		}
+	}()
+
+	return out
 }

@@ -10,5 +10,9 @@ CONTAINER_ID=$(docker run -d --rm -p 127.0.0.1:2379:2379 \
   --name node1)
 
 sleep 5
-docker run -it --net=host -e ETCDCTL_API=3 quay.io/coreos/etcd:v3.5.21 etcdctl --endpoints http://0.0.0.0:2379 user add "root:${PASSWORD}"
-docker run -it --net=host -e ETCDCTL_API=3 quay.io/coreos/etcd:v3.5.21 etcdctl --endpoints http://0.0.0.0:2379 auth enable --user "root:${PASSWORD}"
+docker run --rm -it --net=host -e ETCDCTL_API=3 quay.io/coreos/etcd:v3.5.21 etcdctl --endpoints http://0.0.0.0:2379 user add "root:${PASSWORD}"
+docker run --rm -it --net=host -e ETCDCTL_API=3 quay.io/coreos/etcd:v3.5.21 etcdctl --endpoints http://0.0.0.0:2379 auth enable --user "root:${PASSWORD}"
+
+go run . etcd -u tests/usernames.txt -p tests/passwords.txt -t 127.0.0.1 -D
+
+docker rm -f $CONTAINER_ID

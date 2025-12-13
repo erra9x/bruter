@@ -2,7 +2,6 @@ package modules
 
 import (
 	"context"
-	"github.com/vflame6/bruter/logger"
 	"github.com/vflame6/bruter/utils"
 	etcd "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
@@ -22,48 +21,8 @@ var etcdLoggerCfg = zap.Config{
 
 var etcdLogger, _ = etcdLoggerCfg.Build()
 
-// EtcdChecker is an implementation of CommandChecker for etcd service
-func EtcdChecker(target net.IP, port int, timeout time.Duration, dialer *utils.ProxyAwareDialer, defaultUsername, defaultPassword string) (bool, bool, error) {
-	success := false
-	secure := false
-
-	// try with encryption first
-	probe, err := ProbeEtcd(target, port, true, timeout, dialer, defaultUsername, defaultPassword)
-	if err == nil {
-		secure = true
-		if probe {
-			success = true
-		}
-	} else {
-		logger.Debugf("(%s:%d) failed to connect to etcd with encryption, trying plaintext", target, port)
-		// connect via plaintext FTP
-		probe, err = ProbeEtcd(target, port, false, timeout, dialer, defaultUsername, defaultPassword)
-		if err == nil {
-			if probe {
-				success = true
-			}
-		} else {
-			// if nothing succeeded, return error
-			return false, false, err
-		}
-	}
-
-	return success, secure, nil
-}
-
 // EtcdHandler is an implementation of ModuleHandler for etcd service
-func EtcdHandler(target net.IP, port int, encryption bool, timeout time.Duration, dialer *utils.ProxyAwareDialer, username, password string) (bool, bool) {
-	probe, err := ProbeEtcd(target, port, encryption, timeout, dialer, username, password)
-	if err != nil {
-		// not connected
-		return false, false
-	}
-
-	// connected and authenticated or not
-	return true, probe
-}
-
-func ProbeEtcd(ip net.IP, port int, encryption bool, timeout time.Duration, d *utils.ProxyAwareDialer, username, password string) (bool, error) {
+func EtcdHandler(dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	var client *etcd.Client
 	var err error
 
@@ -71,15 +30,15 @@ func ProbeEtcd(ip net.IP, port int, encryption bool, timeout time.Duration, d *u
 		grpc.WithBlock(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithContextDialer(func(ctx context.Context, addr string) (net.Conn, error) {
-			return d.DialContext(ctx, "tcp", addr)
+			return dialer.DialContext(ctx, "tcp", addr)
 		}),
 	}
 
-	if encryption {
+	if target.Encryption {
 		client, err = etcd.New(etcd.Config{
 			Logger:      etcdLogger,
 			DialOptions: dialOptions,
-			Endpoints:   []string{net.JoinHostPort(ip.String(), strconv.Itoa(port))},
+			Endpoints:   []string{net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))},
 			DialTimeout: timeout,
 			TLS:         utils.GetTLSConfig(),
 		})
@@ -87,7 +46,7 @@ func ProbeEtcd(ip net.IP, port int, encryption bool, timeout time.Duration, d *u
 		client, err = etcd.New(etcd.Config{
 			Logger:      etcdLogger,
 			DialOptions: dialOptions,
-			Endpoints:   []string{net.JoinHostPort(ip.String(), strconv.Itoa(port))},
+			Endpoints:   []string{net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))},
 			DialTimeout: timeout,
 		})
 	}
@@ -100,7 +59,7 @@ func ProbeEtcd(ip net.IP, port int, encryption bool, timeout time.Duration, d *u
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	_, err = client.Authenticate(ctx, username, password)
+	_, err = client.Authenticate(ctx, credential.Username, credential.Password)
 	if err != nil {
 		// authentication error
 		return false, nil

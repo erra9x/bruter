@@ -195,9 +195,9 @@ type TLSDialerWrapper struct {
 }
 
 func (w *TLSDialerWrapper) Dial(network, addr string) (net.Conn, error) {
-	return w.Dialer.DialTLS(network, addr, nil)
+	return w.Dialer.DialTLS(network, addr, GetTLSConfig())
 }
 
 func (w *TLSDialerWrapper) DialTimeout(network, addr string, timeout time.Duration) (net.Conn, error) {
-	return w.Dialer.DialTLS(network, addr, nil)
+	return w.Dialer.DialTLS(network, addr, GetTLSConfig())
 }

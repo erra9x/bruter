@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
-	"fmt"
-	"github.com/vflame6/bruter/logger"
 	"github.com/vflame6/bruter/utils"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
@@ -16,57 +14,9 @@ import (
 	"time"
 )
 
-// MongoChecker is an implementation of CommandChecker for MongoDB service
-func MongoChecker(target net.IP, port int, timeout time.Duration, dialer *utils.ProxyAwareDialer, defaultUsername, defaultPassword string) (bool, bool, error) {
-	// Try TLS first
-	client, err := GetDefaultMongoConnection(target, port, true, timeout, dialer)
-	if err == nil {
-		defer client.Disconnect(context.Background())
-		return true, true, nil
-	}
-
-	errType := classifyMongoError(err)
-	if errType == "auth_error" {
-		return false, true, nil
-	}
-
-	logger.Debugf("failed to connect to %s:%d with encryption, trying plaintext", target, port)
-	// Try plaintext
-	client, err = GetDefaultMongoConnection(target, port, false, timeout, dialer)
-	if err == nil {
-		defer client.Disconnect(context.Background())
-		return true, false, nil
-	}
-	errType = classifyMongoError(err)
-	if errType == "auth_error" {
-		return false, false, nil
-	}
-
-	return false, false, fmt.Errorf("connection failed: %w", err)
-}
-
 // MongoHandler is an implementation of ModuleHandler for MongoDB service
-// the return values are:
-// IsConnected (bool) to test if connection to the target is successful
-// IsAuthenticated (bool) to test if authentication is successful
-func MongoHandler(target net.IP, port int, encryption bool, timeout time.Duration, dialer *utils.ProxyAwareDialer, username, password string) (bool, bool) {
-	client, err := GetAuthenticatedMongoConnection(target, port, encryption, timeout, dialer, username, password)
-	if err != nil {
-		// check if it is a connection error
-		if classifyMongoError(err) != "auth_error" {
-			return false, false
-		}
-		// connected but not authenticated
-		return true, false
-	}
-	_ = client.Disconnect(context.Background())
-
-	// connected and authenticated
-	return true, true
-}
-
-func GetDefaultMongoConnection(address net.IP, port int, secure bool, timeout time.Duration, dialer *utils.ProxyAwareDialer) (*mongo.Client, error) {
-	addr := net.JoinHostPort(address.String(), strconv.Itoa(port))
+func MongoHandler(dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
 
 	opts := options.Client().
 		SetHosts([]string{addr}).
@@ -74,66 +24,40 @@ func GetDefaultMongoConnection(address net.IP, port int, secure bool, timeout ti
 		SetServerSelectionTimeout(timeout).
 		SetDialer(dialer)
 
-	if secure {
+	if target.Encryption {
 		opts.SetTLSConfig(utils.GetTLSConfig())
 	}
 
-	client, err := mongo.Connect(opts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
-	}
-
-	// Verify connection
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	// ListDatabaseNames requires authentication
-	_, err = client.ListDatabaseNames(ctx, bson.D{})
-	if err != nil {
-		client.Disconnect(context.Background())
-		return nil, fmt.Errorf("failed to list databases: %w", err)
-	}
-
-	return client, nil
-}
-
-func GetAuthenticatedMongoConnection(address net.IP, port int, secure bool, timeout time.Duration, dialer *utils.ProxyAwareDialer, username, password string) (*mongo.Client, error) {
-	addr := net.JoinHostPort(address.String(), strconv.Itoa(port))
-
-	opts := options.Client().
-		SetHosts([]string{addr}).
-		SetTimeout(timeout).
-		SetServerSelectionTimeout(timeout).
-		SetDialer(dialer)
-
-	if secure {
-		opts.SetTLSConfig(utils.GetTLSConfig())
-	}
-
-	if username != "" {
+	if credential.Username != "" {
 		opts.SetAuth(options.Credential{
-			Username: username,
-			Password: password,
+			Username: credential.Username,
+			Password: credential.Password,
 		})
 	}
 
 	client, err := mongo.Connect(opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create client: %w", err)
+		return false, err
 	}
 
 	// Verify connection
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+	defer client.Disconnect(ctx)
 
 	// ListDatabaseNames requires authentication
 	_, err = client.ListDatabaseNames(ctx, bson.D{})
 	if err != nil {
-		client.Disconnect(context.Background())
-		return nil, fmt.Errorf("failed to verify connection: %w", err)
+		if classifyMongoError(err) == "auth_error" {
+			// authentication error
+			return false, nil
+		}
+		// connection error
+		return false, err
 	}
 
-	return client, nil
+	// connected and authenticated
+	return true, nil
 }
 
 func classifyMongoError(err error) string {

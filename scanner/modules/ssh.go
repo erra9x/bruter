@@ -2,7 +2,6 @@ package modules
 
 import (
 	"errors"
-	"fmt"
 	"github.com/vflame6/bruter/logger"
 	"github.com/vflame6/bruter/utils"
 	"golang.org/x/crypto/ssh"
@@ -16,49 +15,17 @@ var (
 	ErrSSHMethodNotAllowed = errors.New("ssh auth method not supported")
 )
 
-// SSHChecker is an implementation of CommandChecker for SSH service
-func SSHChecker(target net.IP, port int, timeout time.Duration, dialer *utils.ProxyAwareDialer, defaultUsername, defaultPassword string) (bool, bool, error) {
-	success := false
-	// SSH is always encrypted, so we always return false for secure here
-
-	check, err := ProbeSSH(target, port, timeout, dialer, defaultUsername, defaultPassword)
-	if err != nil {
-		if errors.Is(err, ErrSSHMethodNotAllowed) {
-			logger.Infof("SSH server %s does not support password authentication", target)
-		}
-
-		// not connected
-		return false, false, err
-	}
-
-	// connected and authenticated/not authenticated
-	success = check
-
-	return success, false, nil
-}
-
 // SSHHandler is an implementation of ModuleHandler for SSH service
-func SSHHandler(target net.IP, port int, encryption bool, timeout time.Duration, dialer *utils.ProxyAwareDialer, username, password string) (bool, bool) {
-	success, err := ProbeSSH(target, port, timeout, dialer, username, password)
-	if err != nil {
-		// not connected
-		return false, false
-	}
-
-	// connected and authenticated/not authenticated
-	return true, success
-}
-
-func ProbeSSH(ip net.IP, port int, timeout time.Duration, dialer *utils.ProxyAwareDialer, username, password string) (bool, error) {
-	addr := net.JoinHostPort(ip.String(), strconv.Itoa(port))
+func SSHHandler(dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
 
 	supported := ssh.SupportedAlgorithms()
 	insecure := ssh.InsecureAlgorithms()
 
 	config := &ssh.ClientConfig{
-		User: username,
+		User: credential.Username,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(password),
+			ssh.Password(credential.Password),
 		},
 		Timeout:         timeout,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
@@ -70,17 +37,19 @@ func ProbeSSH(ip net.IP, port int, timeout time.Duration, dialer *utils.ProxyAwa
 		HostKeyAlgorithms: append(supported.HostKeys, insecure.HostKeys...),
 	}
 
+	// SSH is always encrypted, so we don't check for target.Encryption here
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {
 		// failed to connect
 		return false, err
 	}
-	defer conn.Close()
 
 	sshConn, _, _, err := ssh.NewClientConn(conn, addr, config)
 	if err != nil {
+		_ = conn.Close()
+		// check for unsupported authentication method
 		if errors.Is(classifySSHError(err), ErrSSHMethodNotAllowed) {
-			// unsupported authentication method
+			logger.Infof("SSH server %s:%d does not support password authentication", target.IP, target.Port)
 			return false, err
 		}
 		// failed to authenticate
@@ -89,6 +58,7 @@ func ProbeSSH(ip net.IP, port int, timeout time.Duration, dialer *utils.ProxyAwa
 
 	// authentication succeeded
 	_ = sshConn.Close()
+	_ = conn.Close()
 	return true, nil
 }
 
@@ -105,24 +75,15 @@ func classifySSHError(err error) error {
 	// - "Permission denied (publickey)"
 	// - "Permission denied (publickey,keyboard-interactive)"
 	// - "Permission denied (publickey,gssapi-keyex,gssapi-with-mic)"
-	if containsAny(errStr,
+	if utils.ContainsAny(errStr,
 		"server sent: publickey",
 		"no supported authentication methods available",
 		"permission denied (publickey)",
 		"permission denied (publickey,",
 		"disconnected: no supported authentication") {
-		return fmt.Errorf("%w: %v", ErrSSHMethodNotAllowed, err)
+		return ErrSSHMethodNotAllowed
 	}
 
 	// default
 	return err
-}
-
-func containsAny(s string, substrs ...string) bool {
-	for _, sub := range substrs {
-		if strings.Contains(s, sub) {
-			return true
-		}
-	}
-	return false
 }
