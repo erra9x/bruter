@@ -9,13 +9,13 @@ import (
 )
 
 // AUTHOR of the program
-const AUTHOR = "vflame6"
+const AUTHOR = "Maksim Radaev (@vflame6)"
 
 // VERSION should be linked to actual tag
 const VERSION = "v0.1.2"
 
 // BANNER format string. It is used in PrintBanner function with VERSION
-const BANNER = "    __               __           \n   / /_  _______  __/ /____  _____\n  / __ \\/ ___/ / / / __/ _ \\/ ___/\n / /_/ / /  / /_/ / /_/  __/ /    \n/_.___/_/   \\__,_/\\__/\\___/_/      %s\n                                  \n"
+const BANNER = "    __               __           \n   / /_  _______  __/ /____  _____\n  / __ \\/ ___/ / / / __/ _ \\/ ___/\n / /_/ / /  / /_/ / /_/  __/ /    \n/_.___/_/   \\__,_/\\__/\\___/_/      %s\n                                  \nMade by %s\n\n"
 
 // program commands, flags and arguments
 var (
@@ -33,7 +33,7 @@ var (
 	threadsFlag       = app.Flag("concurrent-threads", "Number of parallel threads per target").Short('c').Default("10").Int()
 	delayFlag         = app.Flag("delay", "Delay between each attempt. Will always use single thread if set").Short('d').Default("0s").Duration()
 	timeoutFlag       = app.Flag("timeout", "Connection timeout in seconds").Default("5s").Duration()
-	stopOnSuccessFlag = app.Flag("stop-on-success", "Stop bruteforce the host on first success").Default("false").Bool()
+	stopOnSuccessFlag = app.Flag("stop-on-success", "Stop bruteforce the host on first success").Short('f').Default("false").Bool()
 	retryFlag         = app.Flag("max-retries", "Number of connection errors to stop bruteforce the host. Specify 0 to disable this behavior").Default("30").Int()
 
 	// connection flags
@@ -120,7 +120,7 @@ Commands: {{template "FormatCommandList" .App.Commands}}
 
 // PrintBanner is a function to print program banner
 func PrintBanner() {
-	fmt.Printf(BANNER, VERSION)
+	fmt.Printf(BANNER, VERSION, AUTHOR)
 }
 
 // ParseArgs is a function to parse program arguments
