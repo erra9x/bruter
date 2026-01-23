@@ -11,7 +11,7 @@ require (
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/redis/go-redis/v9 v9.17.2
 	go.etcd.io/etcd/client/v3 v3.6.6
-	go.mongodb.org/mongo-driver/v2 v2.4.1
+	go.mongodb.org/mongo-driver/v2 v2.4.2
 	go.uber.org/zap v1.27.1
 	golang.org/x/crypto v0.46.0
 	golang.org/x/net v0.48.0

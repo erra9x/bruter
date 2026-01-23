@@ -128,8 +128,8 @@ go.etcd.io/etcd/client/pkg/v3 v3.6.6/go.mod h1:YngfUVmvsvOJ2rRgStIyHsKtOt9SZI2aB
 go.etcd.io/etcd/client/v3 v3.6.6 h1:G5z1wMf5B9SNexoxOHUGBaULurOZPIgGPsW6CN492ec=
 go.etcd.io/etcd/client/v3 v3.6.6/go.mod h1:36Qv6baQ07znPR3+n7t+Rk5VHEzVYPvFfGmfF4wBHV8=
 go.mongodb.org/mongo-driver v1.11.4/go.mod h1:PTSz5yu21bkT/wXpkS7WR5f0ddqw5quethTUn9WM+2g=
-go.mongodb.org/mongo-driver/v2 v2.4.1 h1:hGDMngUao03OVQ6sgV5csk+RWOIkF+CuLsTPobNMGNI=
-go.mongodb.org/mongo-driver/v2 v2.4.1/go.mod h1:jHeEDJHJq7tm6ZF45Issun9dbogjfnPySb1vXA7EeAI=
+go.mongodb.org/mongo-driver/v2 v2.4.2 h1:HrJ+Auygxceby9MLp3YITobef5a8Bv4HcPFIkml1U7U=
+go.mongodb.org/mongo-driver/v2 v2.4.2/go.mod h1:jHeEDJHJq7tm6ZF45Issun9dbogjfnPySb1vXA7EeAI=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/otel v1.39.0 h1:8yPrr/S0ND9QEfTfdP9V+SiwT4E0G7Y5MO7p85nis48=
