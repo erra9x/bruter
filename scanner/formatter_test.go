@@ -80,7 +80,21 @@ func TestParseTarget(t *testing.T) {
 			wantPort:     9200,
 			wantOriginal: "127.0.0.1:9200",
 		},
+		// Hostname (uses localhost which resolves via /etc/hosts — no real DNS)
+		// wantIP is empty string: we skip IP check and only verify no error + port/original
+		{
+			name:         "hostname localhost",
+			input:        "localhost",
+			wantIP:       "", // skip specific IP check; just verify no error
+			wantPort:     defaultPort,
+			wantOriginal: "localhost",
+		},
 		// Error cases
+		{
+			name:    "empty string",
+			input:   "",
+			wantErr: true,
+		},
 		{
 			name:    "port out of range high",
 			input:   "1.2.3.4:99999",
@@ -94,6 +108,11 @@ func TestParseTarget(t *testing.T) {
 		{
 			name:    "non-numeric port",
 			input:   "1.2.3.4:abc",
+			wantErr: true,
+		},
+		{
+			name:    "too many colons without brackets",
+			input:   "1.2.3.4:22:extra",
 			wantErr: true,
 		},
 	}
@@ -113,9 +132,13 @@ func TestParseTarget(t *testing.T) {
 				t.Fatalf("ParseTarget(%q) unexpected error: %v", tt.input, err)
 			}
 
-			wantIP := net.ParseIP(tt.wantIP)
-			if !got.IP.Equal(wantIP) {
-				t.Errorf("ParseTarget(%q).IP = %v, want %v", tt.input, got.IP, wantIP)
+			if tt.wantIP != "" {
+				wantIP := net.ParseIP(tt.wantIP)
+				if !got.IP.Equal(wantIP) {
+					t.Errorf("ParseTarget(%q).IP = %v, want %v", tt.input, got.IP, wantIP)
+				}
+			} else if got.IP == nil {
+				t.Errorf("ParseTarget(%q).IP = nil, expected a resolved IP", tt.input)
 			}
 
 			if got.Port != tt.wantPort {
