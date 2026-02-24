@@ -44,9 +44,10 @@ var (
 	userAgentFlag = app.Flag("user-agent", "User-Agent for HTTP connections").Default("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36").String()
 
 	// output options
-	quietFlag  = app.Flag("quiet", "Enable quiet mode, print results only").Short('q').Default("false").Bool()
-	debugFlag  = app.Flag("debug", "Enable debug mode, print all logs").Short('D').Default("false").Bool()
-	outputFlag = app.Flag("output", "Filename to write output in raw format").Short('o').Default("").String()
+	quietFlag   = app.Flag("quiet", "Enable quiet mode, print results only").Short('q').Default("false").Bool()
+	debugFlag   = app.Flag("debug", "Enable debug mode, print all logs").Short('D').Default("false").Bool()
+	verboseFlag = app.Flag("verbose", "Enable verbose mode, log every attempt with timestamp").Short('v').Default("false").Bool()
+	outputFlag  = app.Flag("output", "Filename to write output in raw format").Short('o').Default("").String()
 
 	// available modules
 	// sort alphabetically
@@ -171,6 +172,9 @@ func main() {
 		fmt.Printf("Failed to initialize logger: %v\n", err)
 		os.Exit(1)
 	}
+	if *verboseFlag {
+		logger.SetVerbose(true)
+	}
 
 	// print program banner
 	if !*quietFlag {
@@ -196,6 +200,7 @@ func main() {
 		ProxyAuthentication: *proxyAuthFlag,
 		UserAgent:           *userAgentFlag,
 		OutputFileName:      *outputFlag,
+		Verbose:             *verboseFlag,
 	}
 	// try to create scanner
 	s, err := scanner.NewScanner(&options)

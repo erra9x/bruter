@@ -7,6 +7,7 @@ import (
 	"github.com/vflame6/bruter/utils"
 	"net"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -36,6 +37,7 @@ type Options struct {
 	UserAgent           string                  // --user-agent
 	OutputFileName      string
 	OutputFile          *os.File
+	Verbose             bool // --verbose: log every attempt with timestamp
 }
 
 type Result struct {
@@ -250,6 +252,24 @@ func (s *Scanner) ThreadHandler(wg *sync.WaitGroup, credentials <-chan *modules.
 		logger.Debugf("trying %s:%s on %s:%d", credential.Username, credential.Password, target.IP, target.Port)
 		// ignore error here because it is used on initial check with default credentials
 		isSuccess, err := handler(s.Opts.ProxyDialer, s.Opts.Timeout, target, credential)
+
+		// verbose: log every attempt with result status
+		if s.Opts.Verbose {
+			status := "FAIL"
+			if err != nil {
+				status = "ERROR"
+			}
+			if isSuccess {
+				status = "SUCCESS"
+			}
+			logger.Verbosef("%s %s %s:%s -> %s",
+				s.Opts.Command,
+				net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port)),
+				credential.Username,
+				credential.Password,
+				status,
+			)
+		}
 
 		if err != nil && s.Opts.Retries > 0 {
 			target.Mutex.Lock()

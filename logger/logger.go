@@ -13,10 +13,11 @@ import (
 
 // Logger represents a configurable logger instance.
 type Logger struct {
-	quiet  bool
-	debug  bool
-	output io.Writer
-	mu     sync.Mutex
+	quiet   bool
+	debug   bool
+	verbose bool
+	output  io.Writer
+	mu      sync.Mutex
 }
 
 // Default logger instance for global access.
@@ -234,4 +235,33 @@ func Success(v ...interface{}) {
 // Successf logs a formatted success message using the default logger.
 func Successf(format string, v ...interface{}) {
 	defaultLogger.Successf(format, v...)
+}
+
+// SetVerbose enables or disables verbose mode on the logger instance.
+func (l *Logger) SetVerbose(v bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.verbose = v
+}
+
+// SetVerbose enables or disables verbose mode on the default logger.
+func SetVerbose(v bool) {
+	defaultLogger.SetVerbose(v)
+}
+
+// Verbosef logs a formatted verbose message with a timestamp prefix.
+// Only prints when verbose mode is enabled. Independent of quiet/debug modes.
+func (l *Logger) Verbosef(format string, v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.verbose {
+		return
+	}
+	msg := fmt.Sprintf(format, v...)
+	fmt.Fprintf(l.output, "%s [VERBOSE] %s\n", timestamp(), msg)
+}
+
+// Verbosef logs a formatted verbose message using the default logger.
+func Verbosef(format string, v ...interface{}) {
+	defaultLogger.Verbosef(format, v...)
 }
