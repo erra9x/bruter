@@ -101,3 +101,57 @@ func TestNewScanner_IfaceInvalidFallsBack(t *testing.T) {
 		t.Errorf("NewScanner with invalid iface should fall back gracefully, got: %v", err)
 	}
 }
+
+// --- GlobalStop tests ---
+
+func TestScanner_GlobalDone_InitiallyFalse(t *testing.T) {
+	opts := validOptions()
+	opts.GlobalStop = true
+	s, err := NewScanner(opts)
+	if err != nil {
+		t.Fatalf("NewScanner: %v", err)
+	}
+	if s.globalDone.Load() {
+		t.Error("globalDone should be false initially")
+	}
+}
+
+func TestScanner_GlobalDone_SetAndLoad(t *testing.T) {
+	opts := validOptions()
+	s, err := NewScanner(opts)
+	if err != nil {
+		t.Fatalf("NewScanner: %v", err)
+	}
+	s.globalDone.Store(true)
+	if !s.globalDone.Load() {
+		t.Error("globalDone should be true after Store(true)")
+	}
+}
+
+func TestScanner_GlobalStop_FalseByDefault(t *testing.T) {
+	opts := validOptions()
+	s, err := NewScanner(opts)
+	if err != nil {
+		t.Fatalf("NewScanner: %v", err)
+	}
+	if s.Opts.GlobalStop {
+		t.Error("GlobalStop should default to false")
+	}
+}
+
+func TestScanner_StopOnSuccess_Independent(t *testing.T) {
+	// GlobalStop and StopOnSuccess are independent flags
+	opts := validOptions()
+	opts.StopOnSuccess = true
+	opts.GlobalStop = false
+	s, err := NewScanner(opts)
+	if err != nil {
+		t.Fatalf("NewScanner: %v", err)
+	}
+	if !s.Opts.StopOnSuccess {
+		t.Error("StopOnSuccess should be true")
+	}
+	if s.Opts.GlobalStop {
+		t.Error("GlobalStop should be false")
+	}
+}

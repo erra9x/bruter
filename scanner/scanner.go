@@ -18,11 +18,12 @@ import (
 const BufferMultiplier = 4
 
 type Scanner struct {
-	Opts      *Options
-	Targets   chan *modules.Target
-	Results   chan *Result
-	Attempts  atomic.Int64 // total credential pairs tried
-	Successes atomic.Int64 // total successful logins found
+	Opts       *Options
+	Targets    chan *modules.Target
+	Results    chan *Result
+	Attempts   atomic.Int64 // total credential pairs tried
+	Successes  atomic.Int64 // total successful logins found
+	globalDone atomic.Bool  // set true on first success when GlobalStop=true
 }
 
 type Options struct {
@@ -43,6 +44,7 @@ type Options struct {
 	OutputFile          *os.File
 	Verbose             bool   // --verbose: log every attempt with timestamp
 	Iface               string // --iface: bind outgoing connections to this interface
+	GlobalStop          bool   // --global-stop: stop entire run on first success across all hosts
 }
 
 type Result struct {
@@ -180,11 +182,14 @@ func (s *Scanner) ParallelHandler(ctx context.Context, wg *sync.WaitGroup, modul
 	defer wg.Done()
 
 	for {
-		// Exit on cancellation
+		// Exit on cancellation or global stop
 		select {
 		case <-ctx.Done():
 			return
 		default:
+		}
+		if s.Opts.GlobalStop && s.globalDone.Load() {
+			return
 		}
 
 		target, ok := <-s.Targets
@@ -238,8 +243,11 @@ func (s *Scanner) ParallelHandler(ctx context.Context, wg *sync.WaitGroup, modul
 				Username: module.DefaultUsername,
 				Password: module.DefaultPassword,
 			}
+			if s.Opts.GlobalStop {
+				s.globalDone.Store(true)
+			}
 			// skip target if default credentials are found and --stop-on-success is enabled
-			if s.Opts.StopOnSuccess {
+			if s.Opts.StopOnSuccess || s.Opts.GlobalStop {
 				continue
 			}
 		}
@@ -280,6 +288,10 @@ func (s *Scanner) ThreadHandler(ctx context.Context, wg *sync.WaitGroup, credent
 		credential, ok := <-credentials
 		if !ok {
 			break
+		}
+		// shutdown all threads if global stop triggered
+		if s.Opts.GlobalStop && s.globalDone.Load() {
+			return
 		}
 		// shutdown all threads if --stop-on-success is used and password is found
 		if s.Opts.StopOnSuccess && target.Success {
@@ -333,6 +345,9 @@ func (s *Scanner) ThreadHandler(ctx context.Context, wg *sync.WaitGroup, credent
 				Port:     target.Port,
 				Username: credential.Username,
 				Password: credential.Password,
+			}
+			if s.Opts.GlobalStop {
+				s.globalDone.Store(true)
 			}
 		}
 

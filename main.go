@@ -36,7 +36,8 @@ var (
 	threadsFlag       = app.Flag("concurrent-threads", "Number of parallel threads per target").Short('c').Default("10").Int()
 	delayFlag         = app.Flag("delay", "Delay between each attempt. Will always use single thread if set").Short('d').Default("0s").Duration()
 	timeoutFlag       = app.Flag("timeout", "Connection timeout in seconds").Default("5s").Duration()
-	stopOnSuccessFlag = app.Flag("stop-on-success", "Stop bruteforce the host on first success").Short('f').Default("false").Bool()
+	stopOnSuccessFlag = app.Flag("stop-on-success", "Stop bruteforcing current host when first valid credentials found (-f per host, -F global)").Short('f').Default("false").Bool()
+	globalStopFlag    = app.Flag("global-stop", "Stop the entire run on first successful login across all hosts").Short('F').Default("false").Bool()
 	retryFlag         = app.Flag("max-retries", "Number of connection errors to stop bruteforce the host. Specify 0 to disable this behavior").Default("30").Int()
 
 	// connection flags
@@ -199,6 +200,7 @@ func main() {
 		Timeout:             *timeoutFlag,
 		Delay:               *delayFlag,
 		StopOnSuccess:       *stopOnSuccessFlag,
+		GlobalStop:          *globalStopFlag,
 		Retries:             *retryFlag,
 		Proxy:               *proxyFlag,
 		ProxyAuthentication: *proxyAuthFlag,
