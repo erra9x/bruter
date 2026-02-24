@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 func SendTargets(ctx context.Context, targets chan *modules.Target, defaultPort int, filename string) {
@@ -49,8 +50,8 @@ func SendCredentials(ctx context.Context, credentials chan *modules.Credential, 
 }
 
 // GetResults drains the results channel and writes each success to the log and output file.
-// The wg WaitGroup is signalled Done when the channel is fully drained (Bug 2 fix).
-func GetResults(results chan *Result, outputFile *os.File, wg *sync.WaitGroup) {
+// successes is incremented for each result received. wg is Done when channel is fully drained.
+func GetResults(results chan *Result, outputFile *os.File, wg *sync.WaitGroup, successes *atomic.Int64) {
 	defer wg.Done()
 	for {
 		result, ok := <-results
@@ -58,8 +59,8 @@ func GetResults(results chan *Result, outputFile *os.File, wg *sync.WaitGroup) {
 			return
 		}
 
+		successes.Add(1)
 		successString := fmt.Sprintf("[%s] %s:%d [%s] [%s]", result.Command, result.IP, result.Port, result.Username, result.Password)
-
 		logger.Success(successString)
 
 		if outputFile != nil {

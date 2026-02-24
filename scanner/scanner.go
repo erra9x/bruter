@@ -10,6 +10,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -17,9 +18,11 @@ import (
 const BufferMultiplier = 4
 
 type Scanner struct {
-	Opts    *Options
-	Targets chan *modules.Target
-	Results chan *Result
+	Opts      *Options
+	Targets   chan *modules.Target
+	Results   chan *Result
+	Attempts  atomic.Int64 // total credential pairs tried
+	Successes atomic.Int64 // total successful logins found
 }
 
 type Options struct {
@@ -94,6 +97,7 @@ func NewScanner(options *Options) (*Scanner, error) {
 func (s *Scanner) Stop() {
 	if s.Opts.OutputFile != nil {
 		_ = s.Opts.OutputFile.Close()
+		s.Opts.OutputFile = nil // prevent double-close
 	}
 }
 
@@ -141,10 +145,17 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 	// Bug 2 fix: wait for GetResults to finish draining before returning
 	var resultsWg sync.WaitGroup
 	resultsWg.Add(1)
-	go GetResults(s.Results, s.Opts.OutputFile, &resultsWg)
+	go GetResults(s.Results, s.Opts.OutputFile, &resultsWg, &s.Successes)
 	parallelWg.Wait()
 	close(s.Results)
 	resultsWg.Wait()
+
+	// Fix 2 & 4: flush/close output file after GetResults has finished draining
+	s.Stop()
+
+	// Fix 3: print exit stats on normal exit and on cancellation
+	logger.Infof("Done: %d credential pairs tried, %d successful logins found",
+		s.Attempts.Load(), s.Successes.Load())
 
 	if ctx.Err() != nil {
 		logger.Infof("Interrupted")
@@ -268,6 +279,7 @@ func (s *Scanner) ThreadHandler(ctx context.Context, wg *sync.WaitGroup, credent
 		}
 
 		logger.Debugf("trying %s:%s on %s:%d", credential.Username, credential.Password, target.IP, target.Port)
+		s.Attempts.Add(1)
 		// ignore error here because it is used on initial check with default credentials
 		isSuccess, err := handler(ctx, s.Opts.ProxyDialer, s.Opts.Timeout, target, credential)
 
