@@ -52,6 +52,7 @@ var (
 	quietFlag   = app.Flag("quiet", "Enable quiet mode, print results only").Short('q').Default("false").Bool()
 	debugFlag   = app.Flag("debug", "Enable debug mode, print all logs").Short('D').Default("false").Bool()
 	verboseFlag = app.Flag("verbose", "Enable verbose mode, log every attempt with timestamp").Short('v').Default("false").Bool()
+	jsonFlag    = app.Flag("json", "Output results as JSONL (one JSON object per line)").Short('j').Default("false").Bool()
 	outputFlag  = app.Flag("output", "Filename to write output in raw format").Short('o').Default("").String()
 
 	// available modules
@@ -207,6 +208,7 @@ func main() {
 		UserAgent:           *userAgentFlag,
 		OutputFileName:      *outputFlag,
 		Verbose:             *verboseFlag,
+		JSON:                *jsonFlag,
 		Iface:               *ifaceFlag,
 	}
 	// try to create scanner

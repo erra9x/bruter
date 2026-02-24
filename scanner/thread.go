@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/vflame6/bruter/logger"
 	"github.com/vflame6/bruter/scanner/modules"
@@ -49,9 +50,19 @@ func SendCredentials(ctx context.Context, credentials chan *modules.Credential, 
 	}
 }
 
-// GetResults drains the results channel and writes each success to the log and output file.
-// successes is incremented for each result received. wg is Done when channel is fully drained.
-func GetResults(results chan *Result, outputFile *os.File, wg *sync.WaitGroup, successes *atomic.Int64) {
+// jsonResult is the schema for JSONL output.
+type jsonResult struct {
+	Target    string `json:"target"`
+	Port      int    `json:"port"`
+	Protocol  string `json:"protocol"`
+	Username  string `json:"username"`
+	Password  string `json:"password"`
+	Timestamp int64  `json:"timestamp"`
+}
+
+// GetResults drains the results channel and writes each success to the log and/or output file.
+// In JSON mode it emits JSONL; otherwise plain text. wg is Done when channel fully drained.
+func GetResults(results chan *Result, outputFile *os.File, wg *sync.WaitGroup, successes *atomic.Int64, jsonMode bool) {
 	defer wg.Done()
 	for {
 		result, ok := <-results
@@ -60,11 +71,33 @@ func GetResults(results chan *Result, outputFile *os.File, wg *sync.WaitGroup, s
 		}
 
 		successes.Add(1)
-		successString := fmt.Sprintf("[%s] %s:%d [%s] [%s]", result.Command, result.IP, result.Port, result.Username, result.Password)
-		logger.Success(successString)
 
-		if outputFile != nil {
-			_, _ = outputFile.WriteString(successString + "\n")
+		if jsonMode {
+			jr := jsonResult{
+				Target:    result.OriginalTarget,
+				Port:      result.Port,
+				Protocol:  result.Command,
+				Username:  result.Username,
+				Password:  result.Password,
+				Timestamp: result.Timestamp.Unix(),
+			}
+			line, err := json.Marshal(jr)
+			if err != nil {
+				logger.Debugf("json marshal error: %v", err)
+				continue
+			}
+			lineStr := string(line)
+			if outputFile != nil {
+				_, _ = outputFile.WriteString(lineStr + "\n")
+			} else {
+				logger.Success(lineStr)
+			}
+		} else {
+			successString := fmt.Sprintf("[%s] %s:%d [%s] [%s]", result.Command, result.IP, result.Port, result.Username, result.Password)
+			logger.Success(successString)
+			if outputFile != nil {
+				_, _ = outputFile.WriteString(successString + "\n")
+			}
 		}
 	}
 }

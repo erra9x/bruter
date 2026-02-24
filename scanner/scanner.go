@@ -43,16 +43,19 @@ type Options struct {
 	OutputFileName      string
 	OutputFile          *os.File
 	Verbose             bool   // --verbose: log every attempt with timestamp
+	JSON                bool   // --json: output results as JSONL
 	Iface               string // --iface: bind outgoing connections to this interface
 	GlobalStop          bool   // --global-stop: stop entire run on first success across all hosts
 }
 
 type Result struct {
-	Command  string
-	IP       net.IP
-	Port     int
-	Username string
-	Password string
+	Command        string
+	IP             net.IP
+	Port           int
+	Username       string
+	Password       string
+	OriginalTarget string    // raw input from Target.OriginalTarget
+	Timestamp      time.Time // time of successful authentication
 }
 
 // NewScanner function creates new scanner object based on options
@@ -159,7 +162,7 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 	// Bug 2 fix: wait for GetResults to finish draining before returning
 	var resultsWg sync.WaitGroup
 	resultsWg.Add(1)
-	go GetResults(s.Results, s.Opts.OutputFile, &resultsWg, &s.Successes)
+	go GetResults(s.Results, s.Opts.OutputFile, &resultsWg, &s.Successes, s.Opts.JSON)
 	parallelWg.Wait()
 	close(s.Results)
 	resultsWg.Wait()
@@ -237,11 +240,13 @@ func (s *Scanner) ParallelHandler(ctx context.Context, wg *sync.WaitGroup, modul
 		target.Mutex.Unlock()
 		if defaultSuccess {
 			s.Results <- &Result{
-				Command:  s.Opts.Command,
-				IP:       target.IP,
-				Port:     target.Port,
-				Username: module.DefaultUsername,
-				Password: module.DefaultPassword,
+				Command:        s.Opts.Command,
+				IP:             target.IP,
+				Port:           target.Port,
+				Username:       module.DefaultUsername,
+				Password:       module.DefaultPassword,
+				OriginalTarget: target.OriginalTarget,
+				Timestamp:      time.Now(),
 			}
 			if s.Opts.GlobalStop {
 				s.globalDone.Store(true)
@@ -340,11 +345,13 @@ func (s *Scanner) ThreadHandler(ctx context.Context, wg *sync.WaitGroup, credent
 			target.Mutex.Unlock()
 
 			s.Results <- &Result{
-				Command:  s.Opts.Command,
-				IP:       target.IP,
-				Port:     target.Port,
-				Username: credential.Username,
-				Password: credential.Password,
+				Command:        s.Opts.Command,
+				IP:             target.IP,
+				Port:           target.Port,
+				Username:       credential.Username,
+				Password:       credential.Password,
+				OriginalTarget: target.OriginalTarget,
+				Timestamp:      time.Now(),
 			}
 			if s.Opts.GlobalStop {
 				s.globalDone.Store(true)
