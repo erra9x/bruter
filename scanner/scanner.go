@@ -89,7 +89,9 @@ func NewScanner(options *Options) (*Scanner, error) {
 }
 
 func (s *Scanner) Stop() {
-	_ = s.Opts.OutputFile.Close()
+	if s.Opts.OutputFile != nil {
+		_ = s.Opts.OutputFile.Close()
+	}
 }
 
 // Run method is used to handle parallel execution
@@ -133,9 +135,14 @@ func (s *Scanner) Run(command, targets string) error {
 
 		go s.ParallelHandler(&parallelWg, &c)
 	}
-	go GetResults(s.Results, s.Opts.OutputFile)
+
+	// Bug 2 fix: wait for GetResults to finish draining before returning
+	var resultsWg sync.WaitGroup
+	resultsWg.Add(1)
+	go GetResults(s.Results, s.Opts.OutputFile, &resultsWg)
 	parallelWg.Wait()
 	close(s.Results)
+	resultsWg.Wait()
 
 	return nil
 }
@@ -161,7 +168,10 @@ func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, module *modules.Module) {
 		if err == nil {
 			// no error indicates successful connection
 			if isSuccess {
+				// Bug 1 fix: guard target.Success writes with the mutex
+				target.Mutex.Lock()
 				target.Success = true
+				target.Mutex.Unlock()
 			}
 		} else {
 			// if failed, try without encryption
@@ -170,7 +180,9 @@ func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, module *modules.Module) {
 			isSuccess, err = module.Handler(s.Opts.ProxyDialer, s.Opts.Timeout, target, defaultCredential)
 			if err == nil {
 				if isSuccess {
+					target.Mutex.Lock()
 					target.Success = true
+					target.Mutex.Unlock()
 				}
 			} else {
 				logger.Debugf("failed to connect to %s:%d: %v", target.IP, target.Port, err)
@@ -179,7 +191,10 @@ func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, module *modules.Module) {
 		}
 
 		// if succeeded, send to results channel
-		if target.Success {
+		target.Mutex.Lock()
+		defaultSuccess := target.Success
+		target.Mutex.Unlock()
+		if defaultSuccess {
 			s.Results <- &Result{
 				Command:  s.Opts.Command,
 				IP:       target.IP,
@@ -199,8 +214,10 @@ func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, module *modules.Module) {
 		}
 
 		// send credentials to threads
+		// Bug 3 fix: pass a done channel so SendCredentials exits when threads stop early
 		credentials := make(chan *modules.Credential, s.Opts.Threads*BufferMultiplier)
-		go SendCredentials(credentials, s.Opts.Usernames, s.Opts.Passwords)
+		done := make(chan struct{})
+		go SendCredentials(credentials, s.Opts.Usernames, s.Opts.Passwords, done)
 
 		// run threads
 		var threadWg sync.WaitGroup
@@ -209,6 +226,7 @@ func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, module *modules.Module) {
 			go s.ThreadHandler(&threadWg, credentials, module.Handler, target)
 		}
 		threadWg.Wait()
+		close(done) // signal SendCredentials to stop if still running
 	}
 }
 

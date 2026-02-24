@@ -7,6 +7,7 @@ import (
 	"github.com/vflame6/bruter/utils"
 	"os"
 	"strings"
+	"sync"
 )
 
 func SendTargets(targets chan *modules.Target, defaultPort int, filename string) {
@@ -27,17 +28,26 @@ func SendTargets(targets chan *modules.Target, defaultPort int, filename string)
 	close(targets)
 }
 
-func SendCredentials(credentials chan *modules.Credential, usernames, passwords string) {
+// SendCredentials sends credential pairs to the credentials channel.
+// The done channel is closed by the caller when threads stop early,
+// preventing this goroutine from leaking (Bug 3 fix).
+func SendCredentials(credentials chan *modules.Credential, usernames, passwords string, done <-chan struct{}) {
+	defer close(credentials)
 	for linePwd := range utils.ParseFileByLine(passwords) {
 		for lineUsername := range utils.ParseFileByLine(usernames) {
-			credentials <- &modules.Credential{Username: lineUsername, Password: linePwd}
+			select {
+			case credentials <- &modules.Credential{Username: lineUsername, Password: linePwd}:
+			case <-done:
+				return
+			}
 		}
 	}
-
-	close(credentials)
 }
 
-func GetResults(results chan *Result, outputFile *os.File) {
+// GetResults drains the results channel and writes each success to the log and output file.
+// The wg WaitGroup is signalled Done when the channel is fully drained (Bug 2 fix).
+func GetResults(results chan *Result, outputFile *os.File, wg *sync.WaitGroup) {
+	defer wg.Done()
 	for {
 		result, ok := <-results
 		if !ok {
@@ -46,7 +56,7 @@ func GetResults(results chan *Result, outputFile *os.File) {
 
 		successString := fmt.Sprintf("[%s] %s:%d [%s] [%s]", result.Command, result.IP, result.Port, result.Username, result.Password)
 
-		logger.Successf(successString)
+		logger.Success(successString)
 
 		if outputFile != nil {
 			_, _ = outputFile.WriteString(successString + "\n")
