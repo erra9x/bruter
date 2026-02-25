@@ -16,6 +16,8 @@ var Modules = map[string]Module{
 	"ftp":        {21, FTPHandler, "anonymous", "anonymous"},
 	"http-basic": {80, HTTPBasicHandler, "admin", "admin"},
 	"imap":       {143, IMAPHandler, "admin", "admin"},
+	"ldap":       {389, LDAPHandler, "cn=admin,dc=example,dc=com", "admin"},
+	"ldaps":      {636, LDAPHandler, "cn=admin,dc=example,dc=com", "admin"},
 	"mongo":      {27017, MongoHandler, "", ""},
 	"mssql":      {1433, MSSQLHandler, "sa", "sa"},
 	"mysql":      {3306, MySQLHandler, "root", "root"},
