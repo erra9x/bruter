@@ -101,6 +101,7 @@ var (
 	// vault
 	vaultCommand = app.Command("vault", "HashiCorp Vault module (http)")
 	vncCommand   = app.Command("vnc", "VNC module (port 5900)")
+	xmppCommand  = app.Command("xmpp", "XMPP SASL authentication module (port 5222)")
 )
 
 // CustomUsageTemplate is a template for kingpin's help menu
