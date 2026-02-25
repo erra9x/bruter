@@ -11,10 +11,10 @@ import (
 
 // VNCHandler is an implementation of ModuleHandler for VNC RFB password authentication.
 // The credential.Username is ignored — VNC uses only a password.
-func VNCHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func VNCHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false, err
 	}

@@ -12,10 +12,10 @@ import (
 
 // IRCHandler is an implementation of ModuleHandler for IRC server password authentication.
 // Sends PASS/NICK/USER and waits for 001 (welcome) or 464 (password mismatch).
-func IRCHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func IRCHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.DialAuto("tcp", addr, target.Encryption)
+	conn, err := dialer.DialAutoContext(ctx, "tcp", addr, target.Encryption)
 	if err != nil {
 		return false, err
 	}

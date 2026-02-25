@@ -10,10 +10,10 @@ import (
 
 // RexecHandler is an implementation of ModuleHandler for BSD rexec (port 512).
 // Sends null + username\0 + password\0 + command\0, reads one byte: 0x00=ok, 0x01=fail.
-func RexecHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func RexecHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false, err
 	}

@@ -12,10 +12,10 @@ import (
 
 // TeamSpeakHandler is an implementation of ModuleHandler for TeamSpeak 3 ServerQuery.
 // Connects on port 10011, reads the TS3 banner, logs in, and parses the error response.
-func TeamSpeakHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func TeamSpeakHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false, err
 	}

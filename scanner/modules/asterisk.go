@@ -12,10 +12,10 @@ import (
 
 // AsteriskHandler is an implementation of ModuleHandler for the Asterisk Manager Interface (AMI).
 // Connects on port 5038, reads the banner, sends Action: Login, and parses the response block.
-func AsteriskHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func AsteriskHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false, err
 	}

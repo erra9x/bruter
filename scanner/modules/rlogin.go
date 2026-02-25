@@ -11,10 +11,10 @@ import (
 // RloginHandler is an implementation of ModuleHandler for BSD rlogin (port 513).
 // Sends null + client_user\0 + server_user\0 + terminal_type/speed\0.
 // A 0x00 response byte = session accepted (host-based trust, no password).
-func RloginHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func RloginHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false, err
 	}

@@ -14,7 +14,7 @@ import (
 //
 // credential.Username — SNMP v3 username; empty or "public" triggers v2c mode.
 // credential.Password — community string (v1/v2c) or auth password (v3).
-func SNMPHandler(_ context.Context, _ *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func SNMPHandler(ctx context.Context, _ *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	g := &gosnmp.GoSNMP{
 		Target:    target.IP.String(),
 		Port:      uint16(target.Port), //nolint:gosec // port fits in uint16 by construction
@@ -22,6 +22,7 @@ func SNMPHandler(_ context.Context, _ *utils.ProxyAwareDialer, timeout time.Dura
 		Version:   gosnmp.Version2c,
 		Timeout:   timeout,
 		Retries:   1,
+		Context:   ctx,
 	}
 
 	if err := g.Connect(); err != nil {

@@ -14,10 +14,10 @@ import (
 
 // RTSPHandler is an implementation of ModuleHandler for RTSP Basic authentication.
 // Sends a DESCRIBE request with Authorization: Basic header and checks the response code.
-func RTSPHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func RTSPHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false, err
 	}

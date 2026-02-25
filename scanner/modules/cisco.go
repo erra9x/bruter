@@ -12,10 +12,10 @@ import (
 
 // CiscoHandler is an implementation of ModuleHandler for Cisco IOS Telnet login.
 // Uses the shared readUntilPrompt helper from telnet_util.go.
-func CiscoHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func CiscoHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false, err
 	}

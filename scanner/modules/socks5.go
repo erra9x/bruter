@@ -11,10 +11,10 @@ import (
 
 // SOCKS5Handler is an implementation of ModuleHandler for SOCKS5 username/password
 // sub-negotiation (RFC 1928 + RFC 1929).
-func SOCKS5Handler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func SOCKS5Handler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false, err
 	}

@@ -10,10 +10,10 @@ import (
 
 // RshHandler is an implementation of ModuleHandler for BSD rsh (port 514).
 // Host-based trust protocol — a 0x00 response means the client IP is trusted.
-func RshHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func RshHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.Dial("tcp", addr)
+	conn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return false, err
 	}

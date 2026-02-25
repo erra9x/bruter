@@ -12,10 +12,10 @@ import (
 
 // TelnetHandler is an implementation of ModuleHandler for Telnet login authentication.
 // Handles IAC negotiation bytes and standard Unix login prompts.
-func TelnetHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func TelnetHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	conn, err := dialer.DialAuto("tcp", addr, target.Encryption)
+	conn, err := dialer.DialAutoContext(ctx, "tcp", addr, target.Encryption)
 	if err != nil {
 		return false, err
 	}
