@@ -4,10 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"github.com/lib/pq"
-	"github.com/vflame6/bruter/utils"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
+	"github.com/vflame6/bruter/utils"
 )
 
 // PostgresHandler is an implementation of ModuleHandler for PostgreSQL service

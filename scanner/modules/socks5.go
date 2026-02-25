@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"time"
 
 	"github.com/vflame6/bruter/utils"
@@ -13,7 +12,7 @@ import (
 // SOCKS5Handler is an implementation of ModuleHandler for SOCKS5 username/password
 // sub-negotiation (RFC 1928 + RFC 1929).
 func SOCKS5Handler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {

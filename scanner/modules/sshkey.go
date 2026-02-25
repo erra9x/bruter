@@ -4,9 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"net"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -19,7 +17,7 @@ import (
 // credential.Username = SSH username
 // credential.Password = path to a PEM private key file, OR raw PEM content starting with "-----"
 func SSHKeyHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	// Load private key — either raw PEM or a file path.
 	pemData := []byte(credential.Password)

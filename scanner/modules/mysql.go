@@ -4,8 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +13,7 @@ import (
 
 // MySQLHandler is an implementation of ModuleHandler for MySQL service.
 func MySQLHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	dsn := fmt.Sprintf("%s:%s@tcp(%s)/", credential.Username, credential.Password, addr)
 	if target.Encryption {

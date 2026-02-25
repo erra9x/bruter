@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +13,7 @@ import (
 // CiscoHandler is an implementation of ModuleHandler for Cisco IOS Telnet login.
 // Uses the shared readUntilPrompt helper from telnet_util.go.
 func CiscoHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {

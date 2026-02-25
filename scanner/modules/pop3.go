@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 // POP3Handler is an implementation of ModuleHandler for POP3 USER/PASS auth (RFC 1939).
 // Supports plain TCP (port 110) and TLS (port 995).
 func POP3Handler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	var conn net.Conn
 	var err error

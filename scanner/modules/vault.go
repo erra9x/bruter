@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/vflame6/bruter/utils"
 	"io/ioutil"
 	"net"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
+
+	"github.com/vflame6/bruter/utils"
 )
 
 // VaultHandler is an implementation of ModuleHandler for HashiCorp Vault service
@@ -25,7 +25,7 @@ func VaultHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout t
 	}
 	reqData := bytes.NewBuffer(reqJson)
 
-	hostPort := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	hostPort := target.Addr()
 	var url string
 	if target.Encryption {
 		url = fmt.Sprintf("https://%s/v1/auth/userpass/login/%s", hostPort, credential.Username)

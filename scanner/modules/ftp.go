@@ -2,11 +2,11 @@ package modules
 
 import (
 	"context"
+	"net"
+	"time"
+
 	"github.com/jlaffaye/ftp"
 	"github.com/vflame6/bruter/utils"
-	"net"
-	"strconv"
-	"time"
 )
 
 // FTPHandler is an implementation of ModuleHandler for FTP service
@@ -14,7 +14,7 @@ func FTPHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout tim
 	var conn *ftp.ServerConn
 	var err error
 
-	connString := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	connString := target.Addr()
 
 	// Wrap dialer to respect ctx cancellation
 	dialFn := func(network, addr string) (net.Conn, error) {

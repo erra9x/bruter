@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 // TelnetHandler is an implementation of ModuleHandler for Telnet login authentication.
 // Handles IAC negotiation bytes and standard Unix login prompts.
 func TelnetHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	var (
 		conn net.Conn

@@ -80,7 +80,6 @@ func timestamp() string {
 // In normal mode: prints with timestamp and [FATAL] prefix.
 func (l *Logger) Fatal(v ...interface{}) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
 
 	msg := fmt.Sprint(v...)
 
@@ -90,13 +89,13 @@ func (l *Logger) Fatal(v ...interface{}) {
 		fmt.Fprintf(l.output, "%s [FATAL] %s\n", timestamp(), msg)
 	}
 
+	l.mu.Unlock()
 	os.Exit(1)
 }
 
 // Fatalf logs a formatted fatal message and exits the program.
 func (l *Logger) Fatalf(format string, v ...interface{}) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
 
 	msg := fmt.Sprintf(format, v...)
 
@@ -106,6 +105,7 @@ func (l *Logger) Fatalf(format string, v ...interface{}) {
 		fmt.Fprintf(l.output, "%s [FATAL] %s\n", timestamp(), msg)
 	}
 
+	l.mu.Unlock()
 	os.Exit(1)
 }
 

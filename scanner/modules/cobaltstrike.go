@@ -3,8 +3,6 @@ package modules
 import (
 	"context"
 	"io"
-	"net"
-	"strconv"
 	"time"
 
 	"github.com/vflame6/bruter/utils"
@@ -23,7 +21,7 @@ import (
 //
 // credential.Username is unused — CS uses only a shared team password.
 func CobaltStrikeHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	tlsCfg := utils.GetTLSConfig()
 	tlsCfg.ServerName = "" // CS uses self-signed cert; hostname verification skipped

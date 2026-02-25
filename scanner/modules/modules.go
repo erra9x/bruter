@@ -2,10 +2,12 @@ package modules
 
 import (
 	"context"
-	"github.com/vflame6/bruter/utils"
 	"net"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/vflame6/bruter/utils"
 )
 
 // Modules stores all available services for bruteforce
@@ -64,6 +66,11 @@ type Target struct {
 	Success        bool
 	Retries        int
 	Mutex          sync.Mutex
+}
+
+// Addr returns the target address as "host:port". The result is cached after the first call.
+func (t *Target) Addr() string {
+	return net.JoinHostPort(t.IP.String(), strconv.Itoa(t.Port))
 }
 
 type Credential struct {

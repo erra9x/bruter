@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -16,7 +15,7 @@ import (
 // RTSPHandler is an implementation of ModuleHandler for RTSP Basic authentication.
 // Sends a DESCRIBE request with Authorization: Basic header and checks the response code.
 func RTSPHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {

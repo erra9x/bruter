@@ -2,8 +2,6 @@ package modules
 
 import (
 	"context"
-	"net"
-	"strconv"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
@@ -13,7 +11,7 @@ import (
 // LDAPHandler is an implementation of ModuleHandler for LDAP/LDAPS simple bind authentication.
 // Supports plain LDAP (port 389) and LDAPS (port 636) with TLS.
 func LDAPHandler(_ context.Context, _ *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	var (
 		conn *ldap.Conn

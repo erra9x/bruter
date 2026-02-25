@@ -3,18 +3,18 @@ package modules
 import (
 	"context"
 	"errors"
+	"net"
+	"time"
+
 	"github.com/ClickHouse/clickhouse-go/v2"
 	"github.com/vflame6/bruter/utils"
-	"net"
-	"strconv"
-	"time"
 )
 
 var ClickHouseErrAuth = errors.New("authentication error")
 
 // ClickHouseHandler is an implementation of ModuleHandler for ClickHouse service
 func ClickHouseHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	opts := &clickhouse.Options{
 		Addr: []string{addr},

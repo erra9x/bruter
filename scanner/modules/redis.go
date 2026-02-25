@@ -2,16 +2,15 @@ package modules
 
 import (
 	"context"
+	"time"
+
 	"github.com/redis/go-redis/v9"
 	"github.com/vflame6/bruter/utils"
-	"net"
-	"strconv"
-	"time"
 )
 
 // RedisHandler is an implementation of ModuleHandler for Redis service
 func RedisHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	// Create the Redis client options
 	options := &redis.Options{

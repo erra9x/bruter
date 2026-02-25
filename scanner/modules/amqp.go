@@ -5,11 +5,11 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
+	"time"
+
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/vflame6/bruter/utils"
-	"net"
-	"strconv"
-	"time"
 )
 
 // AMQPHandler is an implementation of ModuleHandler for AMQP service
@@ -18,7 +18,7 @@ func AMQPHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout ti
 	var endpoint string
 	var err error
 
-	hostPort := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	hostPort := target.Addr()
 	if target.Encryption {
 		endpoint = fmt.Sprintf("amqps://%s:%s@%s/", credential.Username, credential.Password, hostPort)
 		conn, err = amqp.DialConfig(endpoint, amqp.Config{

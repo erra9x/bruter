@@ -2,8 +2,6 @@ package modules
 
 import (
 	"context"
-	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +12,7 @@ import (
 // SMBHandler is an implementation of ModuleHandler for SMB2/3 authentication.
 // Uses NTLM authentication via go-smb2.
 func SMBHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {

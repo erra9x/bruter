@@ -3,7 +3,6 @@ package modules
 import (
 	"context"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +13,7 @@ import (
 // XMPPHandler is an implementation of ModuleHandler for XMPP SASL authentication.
 // Supports plain XMPP (port 5222) and XMPP over TLS.
 func XMPPHandler(_ context.Context, _ *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	// Use domain from OriginalTarget when available (for SASL JID construction).
 	host := target.IP.String()

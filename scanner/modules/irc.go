@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 // IRCHandler is an implementation of ModuleHandler for IRC server password authentication.
 // Sends PASS/NICK/USER and waits for 001 (welcome) or 464 (password mismatch).
 func IRCHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	var (
 		conn net.Conn

@@ -2,8 +2,6 @@ package modules
 
 import (
 	"context"
-	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -14,7 +12,7 @@ import (
 // VNCHandler is an implementation of ModuleHandler for VNC RFB password authentication.
 // The credential.Username is ignored — VNC uses only a password.
 func VNCHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {

@@ -52,7 +52,7 @@ func NewProxyAwareDialer(proxyHost, proxyAuth string, timeout time.Duration, use
 		var auth *proxy.Auth
 
 		if proxyAuth != "" {
-			testProxyUsernamePassword := strings.Split(proxyAuth, ":")
+			testProxyUsernamePassword := strings.SplitN(proxyAuth, ":", 2)
 			if len(testProxyUsernamePassword) != 2 {
 				return nil, errors.New("invalid proxy auth string, try USERNAME:PASSWORD")
 			}

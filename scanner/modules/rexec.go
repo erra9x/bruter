@@ -3,8 +3,6 @@ package modules
 import (
 	"context"
 	"fmt"
-	"net"
-	"strconv"
 	"time"
 
 	"github.com/vflame6/bruter/utils"
@@ -13,7 +11,7 @@ import (
 // RexecHandler is an implementation of ModuleHandler for BSD rexec (port 512).
 // Sends null + username\0 + password\0 + command\0, reads one byte: 0x00=ok, 0x01=fail.
 func RexecHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {

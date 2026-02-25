@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +13,7 @@ import (
 // TeamSpeakHandler is an implementation of ModuleHandler for TeamSpeak 3 ServerQuery.
 // Connects on port 10011, reads the TS3 banner, logs in, and parses the error response.
 func TeamSpeakHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {

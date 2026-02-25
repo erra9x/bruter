@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 // IMAPHandler is an implementation of ModuleHandler for IMAP LOGIN auth (RFC 3501).
 // Supports plain TCP (port 143) and TLS (port 993).
 func IMAPHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	var conn net.Conn
 	var err error

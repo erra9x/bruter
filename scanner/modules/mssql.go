@@ -4,9 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"net"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +18,7 @@ func MSSQLHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout t
 	connStr := fmt.Sprintf("sqlserver://%s:%s@%s?dial+timeout=%d&connection+timeout=%d",
 		url.QueryEscape(credential.Username),
 		url.QueryEscape(credential.Password),
-		net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port)),
+		target.Addr(),
 		secs, secs,
 	)
 	if !target.Encryption {

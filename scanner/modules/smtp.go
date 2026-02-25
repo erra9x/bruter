@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"net"
 	"net/smtp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +14,7 @@ import (
 // SMTPHandler is an implementation of ModuleHandler for SMTP AUTH service.
 // Supports plain TCP (STARTTLS opportunistic) and direct TLS (port 465).
 func SMTPHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 	host := target.IP.String()
 
 	var conn net.Conn

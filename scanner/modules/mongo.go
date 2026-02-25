@@ -4,19 +4,19 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"net"
+	"strings"
+	"time"
+
 	"github.com/vflame6/bruter/utils"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
-	"net"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // MongoHandler is an implementation of ModuleHandler for MongoDB service
 func MongoHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	opts := options.Client().
 		SetHosts([]string{addr}).

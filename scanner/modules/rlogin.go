@@ -3,8 +3,6 @@ package modules
 import (
 	"context"
 	"fmt"
-	"net"
-	"strconv"
 	"time"
 
 	"github.com/vflame6/bruter/utils"
@@ -14,7 +12,7 @@ import (
 // Sends null + client_user\0 + server_user\0 + terminal_type/speed\0.
 // A 0x00 response byte = session accepted (host-based trust, no password).
 func RloginHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	conn, err := dialer.Dial("tcp", addr)
 	if err != nil {

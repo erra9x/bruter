@@ -6,7 +6,6 @@ import (
 	"io"
 	"net"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/vflame6/bruter/utils"
@@ -20,7 +19,7 @@ func HTTPBasicHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeo
 		scheme = "https"
 	}
 
-	hostPort := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	hostPort := target.Addr()
 	url := fmt.Sprintf("%s://%s/", scheme, hostPort)
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

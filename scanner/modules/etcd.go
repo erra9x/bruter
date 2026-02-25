@@ -2,14 +2,14 @@ package modules
 
 import (
 	"context"
+	"net"
+	"time"
+
 	"github.com/vflame6/bruter/utils"
 	etcd "go.etcd.io/etcd/client/v3"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"net"
-	"strconv"
-	"time"
 )
 
 var etcdLoggerCfg = zap.Config{
@@ -38,7 +38,7 @@ func EtcdHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout ti
 		client, err = etcd.New(etcd.Config{
 			Logger:      etcdLogger,
 			DialOptions: dialOptions,
-			Endpoints:   []string{net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))},
+			Endpoints:   []string{target.Addr()},
 			DialTimeout: timeout,
 			TLS:         utils.GetTLSConfig(),
 		})
@@ -46,7 +46,7 @@ func EtcdHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout ti
 		client, err = etcd.New(etcd.Config{
 			Logger:      etcdLogger,
 			DialOptions: dialOptions,
-			Endpoints:   []string{net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))},
+			Endpoints:   []string{target.Addr()},
 			DialTimeout: timeout,
 		})
 	}

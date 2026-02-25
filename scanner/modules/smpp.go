@@ -5,14 +5,14 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
+	"time"
+
 	"github.com/linxGnu/gosmpp"
 	"github.com/linxGnu/gosmpp/data"
 	"github.com/linxGnu/gosmpp/pdu"
 	"github.com/vflame6/bruter/utils"
-	"net"
-	"strconv"
-	"strings"
-	"time"
 )
 
 // SMPPErrAuth represents an authentication error (invalid credentials).
@@ -20,7 +20,7 @@ var SMPPErrAuth = errors.New("authentication error")
 
 // SMPPHandler is an implementation of ModuleHandler for SMPP service
 func SMPPHandler(ctx context.Context, d *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port))
+	addr := target.Addr()
 
 	// Create authentication config
 	auth := gosmpp.Auth{
