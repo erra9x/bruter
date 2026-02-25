@@ -11,6 +11,7 @@ import (
 // Modules stores all available services for bruteforce
 var Modules = map[string]Module{
 	"amqp":         {5672, AMQPHandler, "guest", "guest"},
+	"asterisk":     {5038, AsteriskHandler, "admin", "admin"},
 	"cisco":        {23, CiscoHandler, "cisco", "cisco"},
 	"cisco-enable": {23, CiscoEnableHandler, "cisco", "cisco"},
 	"clickhouse":   {9000, ClickHouseHandler, "default", ""},

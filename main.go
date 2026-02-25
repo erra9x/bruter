@@ -59,7 +59,8 @@ var (
 	// sort alphabetically
 
 	// amqp
-	amqpCommand = app.Command("amqp", "AMQP module")
+	amqpCommand     = app.Command("amqp", "AMQP module")
+	asteriskCommand = app.Command("asterisk", "Asterisk Manager Interface module (port 5038)")
 	// clickhouse
 	clickhouseCommand = app.Command("clickhouse", "ClickHouse module (native)")
 	// etcd
