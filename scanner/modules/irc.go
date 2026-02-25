@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -16,15 +15,7 @@ import (
 func IRCHandler(_ context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	var (
-		conn net.Conn
-		err  error
-	)
-	if target.Encryption {
-		conn, err = dialer.DialTLS("tcp", addr, utils.GetTLSConfig())
-	} else {
-		conn, err = dialer.Dial("tcp", addr)
-	}
+	conn, err := dialer.DialAuto("tcp", addr, target.Encryption)
 	if err != nil {
 		return false, err
 	}

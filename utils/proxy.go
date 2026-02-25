@@ -195,6 +195,22 @@ func (p *ProxyAwareDialer) DialTLSContext(ctx context.Context, network, addr str
 	return tlsConn, nil
 }
 
+// DialAuto dials using TLS or plaintext based on the encryption flag.
+func (p *ProxyAwareDialer) DialAuto(network, addr string, encryption bool) (net.Conn, error) {
+	if encryption {
+		return p.DialTLS(network, addr, GetTLSConfig())
+	}
+	return p.Dial(network, addr)
+}
+
+// DialAutoContext dials using TLS or plaintext based on the encryption flag, with context support.
+func (p *ProxyAwareDialer) DialAutoContext(ctx context.Context, network, addr string, encryption bool) (net.Conn, error) {
+	if encryption {
+		return p.DialTLSContext(ctx, network, addr, GetTLSConfig())
+	}
+	return p.DialContext(ctx, network, addr)
+}
+
 func (p *ProxyAwareDialer) Timeout() time.Duration {
 	return p.timeout
 }

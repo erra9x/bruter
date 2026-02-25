@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"net"
 	"strings"
 	"time"
 
@@ -16,14 +15,7 @@ import (
 func POP3Handler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
-	var conn net.Conn
-	var err error
-
-	if target.Encryption {
-		conn, err = dialer.DialTLSContext(ctx, "tcp", addr, utils.GetTLSConfig())
-	} else {
-		conn, err = dialer.DialContext(ctx, "tcp", addr)
-	}
+	conn, err := dialer.DialAutoContext(ctx, "tcp", addr, target.Encryption)
 	if err != nil {
 		return false, err
 	}
