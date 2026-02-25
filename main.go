@@ -76,6 +76,7 @@ var (
 	ciscoCommand        = app.Command("cisco", "Cisco IOS Telnet module (port 23)")
 	ciscoEnableCommand  = app.Command("cisco-enable", "Cisco IOS enable-mode password module (port 23)")
 	cobaltStrikeCommand = app.Command("cobaltstrike", "Cobalt Strike team server module (port 50050)")
+	teamSpeakCommand    = app.Command("teamspeak", "TeamSpeak 3 ServerQuery module (port 10011)")
 	telnetCommand       = app.Command("telnet", "Telnet module (port 23 / TLS)")
 	// ldap
 	ldapCommand  = app.Command("ldap", "LDAP module (port 389 / 636 TLS)")
