@@ -30,6 +30,7 @@ var Modules = map[string]Module{
 	"smb":          {445, SMBHandler, "Administrator", ""},
 	"smtp":         {25, SMTPHandler, "admin", "admin"},
 	"ssh":          {22, SSHHandler, "root", "123456"},
+	"sshkey":       {22, SSHKeyHandler, "root", "/path/to/key"},
 	"telnet":       {23, TelnetHandler, "admin", "admin"},
 	"vault":        {8200, VaultHandler, "admin", "admin"},
 	"vnc":          {5900, VNCHandler, "", "admin"},

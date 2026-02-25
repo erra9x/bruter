@@ -95,7 +95,8 @@ var (
 	// smtp
 	smtpCommand = app.Command("smtp", "SMTP AUTH module (port 25 / 465 TLS / 587 STARTTLS)")
 	// ssh
-	sshCommand = app.Command("ssh", "SSH module")
+	sshCommand    = app.Command("ssh", "SSH module")
+	sshkeyCommand = app.Command("sshkey", "SSH public key authentication module (port 22)")
 	// vault
 	vaultCommand = app.Command("vault", "HashiCorp Vault module (http)")
 	vncCommand   = app.Command("vnc", "VNC module (port 5900)")
