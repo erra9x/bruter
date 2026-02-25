@@ -32,6 +32,7 @@ var Modules = map[string]Module{
 	"ssh":          {22, SSHHandler, "root", "123456"},
 	"telnet":       {23, TelnetHandler, "admin", "admin"},
 	"vault":        {8200, VaultHandler, "admin", "admin"},
+	"vnc":          {5900, VNCHandler, "", "admin"},
 }
 
 type Module struct {
