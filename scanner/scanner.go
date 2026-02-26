@@ -1,13 +1,17 @@
 package scanner
 
 import (
+	"context"
 	"errors"
 	"github.com/vflame6/bruter/logger"
 	"github.com/vflame6/bruter/scanner/modules"
 	"github.com/vflame6/bruter/utils"
 	"net"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -15,14 +19,21 @@ import (
 const BufferMultiplier = 4
 
 type Scanner struct {
-	Opts    *Options
-	Targets chan *modules.Target
-	Results chan *Result
+	Opts       *Options
+	Targets    chan *modules.Target
+	Results    chan *Result
+	Attempts   atomic.Int64 // total credential pairs tried
+	Successes  atomic.Int64 // total successful logins found
+	globalDone atomic.Bool  // set true on first success when GlobalStop=true
 }
 
 type Options struct {
 	Usernames           string
 	Passwords           string
+	Combo               string   // --combo: file with user:pass pairs
+	UsernameList        []string // pre-loaded usernames (populated in Run)
+	PasswordList        []string // pre-loaded passwords (populated in Run)
+	ComboList           []modules.Credential // pre-loaded combo pairs (populated in Run)
 	Command             string
 	Timeout             time.Duration
 	Parallel            int
@@ -36,14 +47,20 @@ type Options struct {
 	UserAgent           string                  // --user-agent
 	OutputFileName      string
 	OutputFile          *os.File
+	Verbose             bool   // --verbose: log every attempt with timestamp
+	JSON                bool   // --json: output results as JSONL
+	Iface               string // --iface: bind outgoing connections to this interface
+	GlobalStop          bool   // --global-stop: stop entire run on first success across all hosts
 }
 
 type Result struct {
-	Command  string
-	IP       net.IP
-	Port     int
-	Username string
-	Password string
+	Command        string
+	IP             net.IP
+	Port           int
+	Username       string
+	Password       string
+	OriginalTarget string    // raw input from Target.OriginalTarget
+	Timestamp      time.Time // time of successful authentication
 }
 
 // NewScanner function creates new scanner object based on options
@@ -59,8 +76,19 @@ func NewScanner(options *Options) (*Scanner, error) {
 		return nil, errors.New("invalid number for retries")
 	}
 
+	// resolve interface binding IP (nil = OS default)
+	var localAddr net.IP
+	if options.Iface != "" {
+		ip, ifaceErr := utils.GetInterfaceIPv4(options.Iface)
+		if ifaceErr != nil {
+			logger.Infof("interface %q unavailable (%v), using default routing", options.Iface, ifaceErr)
+		} else {
+			localAddr = ip
+		}
+	}
+
 	// custom dialer to handle connections, proxy settings and http clients
-	dialer, err := utils.NewProxyAwareDialer(options.Proxy, options.ProxyAuthentication, options.Timeout, options.UserAgent)
+	dialer, err := utils.NewProxyAwareDialer(options.Proxy, options.ProxyAuthentication, options.Timeout, options.UserAgent, localAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +117,14 @@ func NewScanner(options *Options) (*Scanner, error) {
 }
 
 func (s *Scanner) Stop() {
-	_ = s.Opts.OutputFile.Close()
+	if s.Opts.OutputFile != nil {
+		_ = s.Opts.OutputFile.Close()
+		s.Opts.OutputFile = nil // prevent double-close
+	}
 }
 
 // Run method is used to handle parallel execution
-func (s *Scanner) Run(command, targets string) error {
+func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 	var count int
 	var err error
 
@@ -123,72 +154,108 @@ func (s *Scanner) Run(command, targets string) error {
 		s.Opts.Parallel = count
 	}
 
+	// pre-load credentials into memory once
+	s.Opts.UsernameList = utils.LoadLines(s.Opts.Usernames)
+	s.Opts.PasswordList = utils.LoadLines(s.Opts.Passwords)
+
+	// load combo wordlist if provided
+	if s.Opts.Combo != "" {
+		for _, line := range utils.LoadLines(s.Opts.Combo) {
+			// split on first colon only (password may contain colons)
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				s.Opts.ComboList = append(s.Opts.ComboList, modules.Credential{
+					Username: parts[0],
+					Password: parts[1],
+				})
+			}
+		}
+	}
+
+	// start progress display (disabled in quiet mode)
+	var progress *Progress
+	if !logger.IsQuiet() {
+		totalCreds := int64(len(s.Opts.UsernameList))*int64(len(s.Opts.PasswordList)) + int64(len(s.Opts.ComboList))
+		progress = NewProgress(s, totalCreds)
+		progress.Start()
+	}
+
 	// send targets to targets channel
-	go SendTargets(s.Targets, c.DefaultPort, targets)
+	go SendTargets(ctx, s.Targets, c.DefaultPort, targets)
 
 	// run parallel threads
 	var parallelWg sync.WaitGroup
 	for i := 0; i < s.Opts.Parallel; i++ {
 		parallelWg.Add(1)
-
-		go s.ParallelHandler(&parallelWg, &c)
+		go s.ParallelHandler(ctx, &parallelWg, &c)
 	}
-	go GetResults(s.Results, s.Opts.OutputFile)
+
+	// Bug 2 fix: wait for GetResults to finish draining before returning
+	var resultsWg sync.WaitGroup
+	resultsWg.Add(1)
+	go GetResults(s.Results, s.Opts.OutputFile, &resultsWg, &s.Successes, s.Opts.JSON)
 	parallelWg.Wait()
 	close(s.Results)
+	resultsWg.Wait()
+
+	// stop progress display before printing final stats
+	if progress != nil {
+		progress.Stop()
+	}
+
+	// Fix 2 & 4: flush/close output file after GetResults has finished draining
+	s.Stop()
+
+	// Fix 3: print exit stats on normal exit and on cancellation
+	logger.Infof("Done: %d credential pairs tried, %d successful logins found",
+		s.Attempts.Load(), s.Successes.Load())
+
+	if ctx.Err() != nil {
+		logger.Infof("Interrupted")
+	}
 
 	return nil
 }
 
-func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, module *modules.Module) {
+func (s *Scanner) ParallelHandler(ctx context.Context, wg *sync.WaitGroup, module *modules.Module) {
 	defer wg.Done()
 
 	for {
+		// Exit on cancellation or global stop
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+		if s.Opts.GlobalStop && s.globalDone.Load() {
+			return
+		}
+
 		target, ok := <-s.Targets
 		if !ok {
 			break
 		}
 
-		// check with checker
-		logger.Debugf("trying default credentials on %s:%d", target.IP, target.Port)
-		defaultCredential := &modules.Credential{
-			Username: module.DefaultUsername,
-			Password: module.DefaultPassword,
-		}
-		// try with encryption first
-		// Encryption value in target is true by default exactly for that check
-		isSuccess, err := module.Handler(s.Opts.ProxyDialer, s.Opts.Timeout, target, defaultCredential)
-		if err == nil {
-			// no error indicates successful connection
-			if isSuccess {
-				target.Success = true
-			}
-		} else {
-			// if failed, try without encryption
-			logger.Debugf("failed to connect to %s:%d with encryption, trying plaintext", target.IP, target.Port)
-			target.Encryption = false
-			isSuccess, err = module.Handler(s.Opts.ProxyDialer, s.Opts.Timeout, target, defaultCredential)
-			if err == nil {
-				if isSuccess {
-					target.Success = true
-				}
-			} else {
-				logger.Debugf("failed to connect to %s:%d: %v", target.IP, target.Port, err)
-				continue
-			}
+		// probe target: check reachability, TLS fallback, and default credentials
+		reachable, defaultCredsWork := s.probe(ctx, module, target)
+		if !reachable {
+			continue
 		}
 
-		// if succeeded, send to results channel
-		if target.Success {
+		if defaultCredsWork {
 			s.Results <- &Result{
-				Command:  s.Opts.Command,
-				IP:       target.IP,
-				Port:     target.Port,
-				Username: module.DefaultUsername,
-				Password: module.DefaultPassword,
+				Command:        s.Opts.Command,
+				IP:             target.IP,
+				Port:           target.Port,
+				Username:       module.DefaultUsername,
+				Password:       module.DefaultPassword,
+				OriginalTarget: target.OriginalTarget,
+				Timestamp:      time.Now(),
 			}
-			// skip target if default credentials are found and --stop-on-success is enabled
-			if s.Opts.StopOnSuccess {
+			if s.Opts.GlobalStop {
+				s.globalDone.Store(true)
+			}
+			if s.Opts.StopOnSuccess || s.Opts.GlobalStop {
 				continue
 			}
 		}
@@ -199,26 +266,78 @@ func (s *Scanner) ParallelHandler(wg *sync.WaitGroup, module *modules.Module) {
 		}
 
 		// send credentials to threads
+		// Bug 3 fix: pass a done channel so SendCredentials exits when threads stop early
 		credentials := make(chan *modules.Credential, s.Opts.Threads*BufferMultiplier)
-		go SendCredentials(credentials, s.Opts.Usernames, s.Opts.Passwords)
+		done := make(chan struct{})
+		go SendCredentials(ctx, credentials, s.Opts.UsernameList, s.Opts.PasswordList, s.Opts.ComboList, done)
 
 		// run threads
 		var threadWg sync.WaitGroup
 		for i := 0; i < s.Opts.Threads; i++ {
 			threadWg.Add(1)
-			go s.ThreadHandler(&threadWg, credentials, module.Handler, target)
+			go s.ThreadHandler(ctx, &threadWg, credentials, module.Handler, target)
 		}
 		threadWg.Wait()
+		close(done) // signal SendCredentials to stop if still running
 	}
 }
 
-func (s *Scanner) ThreadHandler(wg *sync.WaitGroup, credentials <-chan *modules.Credential, handler modules.ModuleHandler, target *modules.Target) {
+// probe checks if a target is reachable and whether default credentials work.
+// It tries encrypted connection first, falling back to plaintext.
+// Returns (reachable, defaultCredsWork).
+func (s *Scanner) probe(ctx context.Context, module *modules.Module, target *modules.Target) (bool, bool) {
+	logger.Debugf("trying default credentials on %s:%d", target.IP, target.Port)
+	cred := &modules.Credential{
+		Username: module.DefaultUsername,
+		Password: module.DefaultPassword,
+	}
+
+	// try with encryption first (target.Encryption defaults to true)
+	isSuccess, err := module.Handler(ctx, s.Opts.ProxyDialer, s.Opts.Timeout, target, cred)
+	if err == nil {
+		if isSuccess {
+			target.Mutex.Lock()
+			target.Success = true
+			target.Mutex.Unlock()
+		}
+		return true, isSuccess
+	}
+
+	// fallback to plaintext
+	logger.Debugf("failed to connect to %s:%d with encryption, trying plaintext", target.IP, target.Port)
+	target.Encryption = false
+	isSuccess, err = module.Handler(ctx, s.Opts.ProxyDialer, s.Opts.Timeout, target, cred)
+	if err == nil {
+		if isSuccess {
+			target.Mutex.Lock()
+			target.Success = true
+			target.Mutex.Unlock()
+		}
+		return true, isSuccess
+	}
+
+	logger.Debugf("failed to connect to %s:%d: %v", target.IP, target.Port, err)
+	return false, false
+}
+
+func (s *Scanner) ThreadHandler(ctx context.Context, wg *sync.WaitGroup, credentials <-chan *modules.Credential, handler modules.ModuleHandler, target *modules.Target) {
 	defer wg.Done()
 
 	for {
+		// Exit on cancellation
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
 		credential, ok := <-credentials
 		if !ok {
 			break
+		}
+		// shutdown all threads if global stop triggered
+		if s.Opts.GlobalStop && s.globalDone.Load() {
+			return
 		}
 		// shutdown all threads if --stop-on-success is used and password is found
 		if s.Opts.StopOnSuccess && target.Success {
@@ -230,8 +349,27 @@ func (s *Scanner) ThreadHandler(wg *sync.WaitGroup, credentials <-chan *modules.
 		}
 
 		logger.Debugf("trying %s:%s on %s:%d", credential.Username, credential.Password, target.IP, target.Port)
+		s.Attempts.Add(1)
 		// ignore error here because it is used on initial check with default credentials
-		isSuccess, err := handler(s.Opts.ProxyDialer, s.Opts.Timeout, target, credential)
+		isSuccess, err := handler(ctx, s.Opts.ProxyDialer, s.Opts.Timeout, target, credential)
+
+		// verbose: log every attempt with result status
+		if s.Opts.Verbose {
+			status := "FAIL"
+			if err != nil {
+				status = "ERROR"
+			}
+			if isSuccess {
+				status = "SUCCESS"
+			}
+			logger.Verbosef("%s %s %s:%s -> %s",
+				s.Opts.Command,
+				net.JoinHostPort(target.IP.String(), strconv.Itoa(target.Port)),
+				credential.Username,
+				credential.Password,
+				status,
+			)
+		}
 
 		if err != nil && s.Opts.Retries > 0 {
 			target.Mutex.Lock()
@@ -248,11 +386,16 @@ func (s *Scanner) ThreadHandler(wg *sync.WaitGroup, credentials <-chan *modules.
 			target.Mutex.Unlock()
 
 			s.Results <- &Result{
-				Command:  s.Opts.Command,
-				IP:       target.IP,
-				Port:     target.Port,
-				Username: credential.Username,
-				Password: credential.Password,
+				Command:        s.Opts.Command,
+				IP:             target.IP,
+				Port:           target.Port,
+				Username:       credential.Username,
+				Password:       credential.Password,
+				OriginalTarget: target.OriginalTarget,
+				Timestamp:      time.Now(),
+			}
+			if s.Opts.GlobalStop {
+				s.globalDone.Store(true)
 			}
 		}
 

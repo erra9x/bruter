@@ -13,10 +13,11 @@ import (
 
 // Logger represents a configurable logger instance.
 type Logger struct {
-	quiet  bool
-	debug  bool
-	output io.Writer
-	mu     sync.Mutex
+	quiet   bool
+	debug   bool
+	verbose bool
+	output  io.Writer
+	mu      sync.Mutex
 }
 
 // Default logger instance for global access.
@@ -79,7 +80,6 @@ func timestamp() string {
 // In normal mode: prints with timestamp and [FATAL] prefix.
 func (l *Logger) Fatal(v ...interface{}) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
 
 	msg := fmt.Sprint(v...)
 
@@ -89,13 +89,13 @@ func (l *Logger) Fatal(v ...interface{}) {
 		fmt.Fprintf(l.output, "%s [FATAL] %s\n", timestamp(), msg)
 	}
 
+	l.mu.Unlock()
 	os.Exit(1)
 }
 
 // Fatalf logs a formatted fatal message and exits the program.
 func (l *Logger) Fatalf(format string, v ...interface{}) {
 	l.mu.Lock()
-	defer l.mu.Unlock()
 
 	msg := fmt.Sprintf(format, v...)
 
@@ -105,6 +105,7 @@ func (l *Logger) Fatalf(format string, v ...interface{}) {
 		fmt.Fprintf(l.output, "%s [FATAL] %s\n", timestamp(), msg)
 	}
 
+	l.mu.Unlock()
 	os.Exit(1)
 }
 
@@ -234,4 +235,45 @@ func Success(v ...interface{}) {
 // Successf logs a formatted success message using the default logger.
 func Successf(format string, v ...interface{}) {
 	defaultLogger.Successf(format, v...)
+}
+
+// IsQuiet returns whether the logger is in quiet mode.
+func (l *Logger) IsQuiet() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.quiet
+}
+
+// IsQuiet returns whether the default logger is in quiet mode.
+func IsQuiet() bool {
+	return defaultLogger.IsQuiet()
+}
+
+// SetVerbose enables or disables verbose mode on the logger instance.
+func (l *Logger) SetVerbose(v bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.verbose = v
+}
+
+// SetVerbose enables or disables verbose mode on the default logger.
+func SetVerbose(v bool) {
+	defaultLogger.SetVerbose(v)
+}
+
+// Verbosef logs a formatted verbose message with a timestamp prefix.
+// Only prints when verbose mode is enabled. Independent of quiet/debug modes.
+func (l *Logger) Verbosef(format string, v ...interface{}) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.verbose {
+		return
+	}
+	msg := fmt.Sprintf(format, v...)
+	fmt.Fprintf(l.output, "%s [VERBOSE] %s\n", timestamp(), msg)
+}
+
+// Verbosef logs a formatted verbose message using the default logger.
+func Verbosef(format string, v ...interface{}) {
+	defaultLogger.Verbosef(format, v...)
 }

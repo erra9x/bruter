@@ -2,17 +2,21 @@ package modules
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/vflame6/bruter/utils"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"strings"
 	"time"
+
+	"github.com/vflame6/bruter/utils"
 )
 
 // VaultHandler is an implementation of ModuleHandler for HashiCorp Vault service
-func VaultHandler(dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func VaultHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	reqJson, err := json.Marshal(map[string]string{
 		"password": credential.Password,
 	})
@@ -21,14 +25,31 @@ func VaultHandler(dialer *utils.ProxyAwareDialer, timeout time.Duration, target 
 	}
 	reqData := bytes.NewBuffer(reqJson)
 
+	hostPort := target.Addr()
 	var url string
 	if target.Encryption {
-		url = fmt.Sprintf("https://%s:%d/v1/auth/userpass/login/%s", target.IP, target.Port, credential.Username)
+		url = fmt.Sprintf("https://%s/v1/auth/userpass/login/%s", hostPort, credential.Username)
 	} else {
-		url = fmt.Sprintf("http://%s:%d/v1/auth/userpass/login/%s", target.IP, target.Port, credential.Username)
+		url = fmt.Sprintf("http://%s/v1/auth/userpass/login/%s", hostPort, credential.Username)
 	}
 
-	resp, err := dialer.HTTPClient.Post(url, "application/json", reqData)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, reqData)
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	// Set Host header when the original input was a domain (not an IP).
+	// This ensures virtual-hosted services receive the correct Host.
+	if net.ParseIP(target.OriginalTarget) == nil {
+		host := target.OriginalTarget
+		if h, _, err2 := net.SplitHostPort(target.OriginalTarget); err2 == nil {
+			host = h
+		}
+		req.Host = host
+	}
+
+	resp, err := dialer.HTTPClient.Do(req)
 	if err != nil {
 		// connection error
 		return false, err

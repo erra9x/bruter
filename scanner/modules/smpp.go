@@ -1,24 +1,26 @@
 package modules
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
 	"fmt"
+	"net"
+	"strings"
+	"time"
+
 	"github.com/linxGnu/gosmpp"
 	"github.com/linxGnu/gosmpp/data"
 	"github.com/linxGnu/gosmpp/pdu"
 	"github.com/vflame6/bruter/utils"
-	"net"
-	"strings"
-	"time"
 )
 
 // SMPPErrAuth represents an authentication error (invalid credentials).
 var SMPPErrAuth = errors.New("authentication error")
 
 // SMPPHandler is an implementation of ModuleHandler for SMPP service
-func SMPPHandler(d *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := fmt.Sprintf("%s:%d", target.IP.String(), target.Port)
+func SMPPHandler(ctx context.Context, d *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+	addr := target.Addr()
 
 	// Create authentication config
 	auth := gosmpp.Auth{
@@ -31,9 +33,9 @@ func SMPPHandler(d *utils.ProxyAwareDialer, timeout time.Duration, target *Targe
 	// Create dialer based on secure flag
 	var dialer gosmpp.Dialer
 	if target.Encryption {
-		dialer = createTLSSMPPDialer(d)
+		dialer = createTLSSMPPDialer(ctx, d)
 	} else {
-		dialer = createNonTLSSMPPDialer(d)
+		dialer = createNonTLSSMPPDialer(ctx, d)
 	}
 
 	// Session settings - minimal for connection check
@@ -74,9 +76,9 @@ func SMPPHandler(d *utils.ProxyAwareDialer, timeout time.Duration, target *Targe
 }
 
 // createTLSSMPPDialer creates a TLS dialer with InsecureSkipVerify enabled.
-func createTLSSMPPDialer(d *utils.ProxyAwareDialer) gosmpp.Dialer {
+func createTLSSMPPDialer(ctx context.Context, d *utils.ProxyAwareDialer) gosmpp.Dialer {
 	return func(addr string) (net.Conn, error) {
-		conn, err := d.Dial("tcp", addr)
+		conn, err := d.DialContext(ctx, "tcp", addr)
 		if err != nil {
 			return nil, err
 		}
@@ -105,9 +107,9 @@ func createTLSSMPPDialer(d *utils.ProxyAwareDialer) gosmpp.Dialer {
 }
 
 // createNonTLSSMPPDialer creates a plain TCP dialer with timeout.
-func createNonTLSSMPPDialer(d *utils.ProxyAwareDialer) gosmpp.Dialer {
+func createNonTLSSMPPDialer(ctx context.Context, d *utils.ProxyAwareDialer) gosmpp.Dialer {
 	return func(addr string) (net.Conn, error) {
-		return d.Dial("tcp", addr)
+		return d.DialContext(ctx, "tcp", addr)
 	}
 }
 

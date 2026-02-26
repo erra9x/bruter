@@ -2,15 +2,15 @@ package modules
 
 import (
 	"context"
-	"fmt"
+	"time"
+
 	"github.com/redis/go-redis/v9"
 	"github.com/vflame6/bruter/utils"
-	"time"
 )
 
 // RedisHandler is an implementation of ModuleHandler for Redis service
-func RedisHandler(dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
-	addr := fmt.Sprintf("%s:%d", target.IP.String(), target.Port)
+func RedisHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+	addr := target.Addr()
 
 	// Create the Redis client options
 	options := &redis.Options{
@@ -30,10 +30,10 @@ func RedisHandler(dialer *utils.ProxyAwareDialer, timeout time.Duration, target 
 
 	client := redis.NewClient(options)
 
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel() // Release resources when main returns
+	pingCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
 
-	err := client.Ping(ctx).Err()
+	err := client.Ping(pingCtx).Err()
 
 	if err != nil {
 		if redis.IsAuthError(err) {

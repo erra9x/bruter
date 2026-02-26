@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
+
 	"github.com/alecthomas/kingpin/v2"
 	"github.com/vflame6/bruter/logger"
 	"github.com/vflame6/bruter/scanner"
-	"os"
 )
 
 // AUTHOR of the program
@@ -22,55 +26,96 @@ var (
 	app = kingpin.New("bruter", "bruter is a network services bruteforce tool.")
 
 	// targets
-	targetFlag = app.Flag("target", "Target host or file with targets. Format host or host:port, one per line").Short('t').Required().String()
+	targetFlag = app.Flag("target", "Target host or file with targets. Format host or host:port, one per line").Short('t').String()
+
+	// nmap input
+	nmapFlag = app.Flag("nmap", "Nmap output file (GNMAP or XML, auto-detected). Runs matching modules automatically.").Short('n').String()
 
 	// wordlist flags
-	usernameFlag = app.Flag("username", "Username or file with usernames").Short('u').Required().String()
-	passwordFlag = app.Flag("password", "Password or file with passwords").Short('p').Required().String()
+	usernameFlag = app.Flag("username", "Username or file with usernames").Short('u').String()
+	passwordFlag = app.Flag("password", "Password or file with passwords").Short('p').String()
+	comboFlag    = app.Flag("combo", "Combo wordlist file with user:pass pairs, one per line").String()
 
 	// optimization flags
 	parallelFlag      = app.Flag("concurrent-hosts", "Number of targets in parallel").Short('C').Default("32").Int()
 	threadsFlag       = app.Flag("concurrent-threads", "Number of parallel threads per target").Short('c').Default("10").Int()
 	delayFlag         = app.Flag("delay", "Delay between each attempt. Will always use single thread if set").Short('d').Default("0s").Duration()
 	timeoutFlag       = app.Flag("timeout", "Connection timeout in seconds").Default("5s").Duration()
-	stopOnSuccessFlag = app.Flag("stop-on-success", "Stop bruteforce the host on first success").Short('f').Default("false").Bool()
+	stopOnSuccessFlag = app.Flag("stop-on-success", "Stop bruteforcing current host when first valid credentials found (-f per host, -F global)").Short('f').Default("false").Bool()
+	globalStopFlag    = app.Flag("global-stop", "Stop the entire run on first successful login across all hosts").Short('F').Default("false").Bool()
 	retryFlag         = app.Flag("max-retries", "Number of connection errors to stop bruteforce the host. Specify 0 to disable this behavior").Default("30").Int()
 
 	// connection flags
 	proxyFlag     = app.Flag("proxy", "SOCKS-proxy address to use for connection in format IP:PORT").Default("").String()
 	proxyAuthFlag = app.Flag("proxy-auth", "Proxy username and password in format username:password").Default("").String()
+	ifaceFlag     = app.Flag("iface", "Network interface to bind outgoing connections to (e.g. eth0)").Short('I').Default("").String()
 
 	// http flags
 	userAgentFlag = app.Flag("user-agent", "User-Agent for HTTP connections").Default("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36").String()
 
 	// output options
-	quietFlag  = app.Flag("quiet", "Enable quiet mode, print results only").Short('q').Default("false").Bool()
-	debugFlag  = app.Flag("debug", "Enable debug mode, print all logs").Short('D').Default("false").Bool()
-	outputFlag = app.Flag("output", "Filename to write output in raw format").Short('o').Default("").String()
+	quietFlag   = app.Flag("quiet", "Enable quiet mode, print results only").Short('q').Default("false").Bool()
+	debugFlag   = app.Flag("debug", "Enable debug mode, print all logs").Short('D').Default("false").Bool()
+	verboseFlag = app.Flag("verbose", "Enable verbose mode, log every attempt with timestamp").Short('v').Default("false").Bool()
+	jsonFlag    = app.Flag("json", "Output results as JSONL (one JSON object per line)").Short('j').Default("false").Bool()
+	outputFlag  = app.Flag("output", "Filename to write output in raw format").Short('o').Default("").String()
 
 	// available modules
 	// sort alphabetically
 
 	// amqp
-	amqpCommand = app.Command("amqp", "AMQP module")
+	amqpCommand     = app.Command("amqp", "AMQP module")
+	asteriskCommand = app.Command("asterisk", "Asterisk Manager Interface module (port 5038)")
 	// clickhouse
 	clickhouseCommand = app.Command("clickhouse", "ClickHouse module (native)")
 	// etcd
 	etcdCommand = app.Command("etcd", "etcd module")
 	// ftp
 	ftpCommand = app.Command("ftp", "FTP module")
+	// http-basic
+	httpBasicCommand = app.Command("http-basic", "HTTP Basic Auth module (port 80 / 443 TLS)")
+	// imap
+	imapCommand = app.Command("imap", "IMAP module (port 143 / 993 TLS)")
+	ircCommand  = app.Command("irc", "IRC server password module (port 6667)")
+	// cisco / telnet
+	ciscoCommand        = app.Command("cisco", "Cisco IOS Telnet module (port 23)")
+	ciscoEnableCommand  = app.Command("cisco-enable", "Cisco IOS enable-mode password module (port 23)")
+	cobaltStrikeCommand = app.Command("cobaltstrike", "Cobalt Strike team server module (port 50050)")
+	teamSpeakCommand    = app.Command("teamspeak", "TeamSpeak 3 ServerQuery module (port 10011)")
+	telnetCommand       = app.Command("telnet", "Telnet module (port 23 / TLS)")
+	// ldap
+	ldapCommand  = app.Command("ldap", "LDAP module (port 389 / 636 TLS)")
+	ldapsCommand = app.Command("ldaps", "LDAPS module (port 636 TLS)")
 	// mongodb
 	mongoCommand = app.Command("mongo", "MongoDB module")
+	// mssql
+	mssqlCommand = app.Command("mssql", "Microsoft SQL Server module (port 1433)")
+	// mysql
+	mysqlCommand = app.Command("mysql", "MySQL module (port 3306)")
+	// pop3
+	pop3Command = app.Command("pop3", "POP3 module (port 110 / 995 TLS)")
 	// postgres
 	postgresCommand = app.Command("postgres", "PostgreSQL module")
 	// redis
-	redisCommand = app.Command("redis", "Redis module")
+	redisCommand  = app.Command("redis", "Redis module")
+	rexecCommand  = app.Command("rexec", "BSD rexec module (port 512)")
+	rloginCommand = app.Command("rlogin", "BSD rlogin module (port 513)")
+	rshCommand    = app.Command("rsh", "BSD rsh module (port 514)")
+	rtspCommand   = app.Command("rtsp", "RTSP Basic Auth module (port 554)")
 	// smpp
-	smppCommand = app.Command("smpp", "SMPP module")
+	smbCommand    = app.Command("smb", "SMB module (port 445)")
+	socks5Command = app.Command("socks5", "SOCKS5 username/password authentication module (port 1080)")
+	snmpCommand   = app.Command("snmp", "SNMP v1/v2c community string module (port 161 UDP)")
+	smppCommand   = app.Command("smpp", "SMPP module")
+	// smtp
+	smtpCommand = app.Command("smtp", "SMTP AUTH module (port 25 / 465 TLS / 587 STARTTLS)")
 	// ssh
-	sshCommand = app.Command("ssh", "SSH module")
+	sshCommand    = app.Command("ssh", "SSH module")
+	sshkeyCommand = app.Command("sshkey", "SSH public key authentication module (port 22)")
 	// vault
 	vaultCommand = app.Command("vault", "HashiCorp Vault module (http)")
+	vncCommand   = app.Command("vnc", "VNC module (port 5900)")
+	xmppCommand  = app.Command("xmpp", "XMPP SASL authentication module (port 5222)")
 )
 
 // CustomUsageTemplate is a template for kingpin's help menu
@@ -147,6 +192,11 @@ func ParseArgs() string {
 			}
 		}
 
+		// In nmap mode, no subcommand is needed
+		if *nmapFlag != "" {
+			return ""
+		}
+
 		// No command and no --version/--help, show usage
 		app.Usage(os.Args[1:])
 		os.Exit(0)
@@ -166,10 +216,28 @@ func main() {
 	// parse program arguments
 	command := ParseArgs()
 
+	// nmap mode: --nmap flag takes precedence
+	nmapMode := *nmapFlag != ""
+
+	// Validate: in normal mode, --target is required
+	if !nmapMode && *targetFlag == "" {
+		fmt.Fprintln(os.Stderr, "error: required flag --target not provided, try --help")
+		os.Exit(1)
+	}
+
+	// Validate: credentials are required in both modes (unless --combo is provided)
+	if *comboFlag == "" && (*usernameFlag == "" || *passwordFlag == "") {
+		fmt.Fprintln(os.Stderr, "error: provide --username and --password, or --combo, try --help")
+		os.Exit(1)
+	}
+
 	// instantiate logger
 	if err := logger.Init(*quietFlag, *debugFlag); err != nil {
 		fmt.Printf("Failed to initialize logger: %v\n", err)
 		os.Exit(1)
+	}
+	if *verboseFlag {
+		logger.SetVerbose(true)
 	}
 
 	// print program banner
@@ -178,7 +246,7 @@ func main() {
 	}
 
 	// show which module is executed
-	if !*quietFlag {
+	if !nmapMode && !*quietFlag {
 		logger.Infof("executing %s module", command)
 	}
 
@@ -186,16 +254,21 @@ func main() {
 	options := scanner.Options{
 		Usernames:           *usernameFlag,
 		Passwords:           *passwordFlag,
+		Combo:               *comboFlag,
 		Parallel:            *parallelFlag,
 		Threads:             *threadsFlag,
 		Timeout:             *timeoutFlag,
 		Delay:               *delayFlag,
 		StopOnSuccess:       *stopOnSuccessFlag,
+		GlobalStop:          *globalStopFlag,
 		Retries:             *retryFlag,
 		Proxy:               *proxyFlag,
 		ProxyAuthentication: *proxyAuthFlag,
 		UserAgent:           *userAgentFlag,
 		OutputFileName:      *outputFlag,
+		Verbose:             *verboseFlag,
+		JSON:                *jsonFlag,
+		Iface:               *ifaceFlag,
 	}
 	// try to create scanner
 	s, err := scanner.NewScanner(&options)
@@ -203,16 +276,28 @@ func main() {
 		logger.Fatal(err)
 	}
 
-	// pass the selected command
-	err = s.Run(command, *targetFlag)
-	if err != nil {
-		logger.Fatal(err)
-	}
+	// set up context with signal-based cancellation (Ctrl+C / SIGTERM)
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
-	// finish the execution
-	s.Stop()
-	// show which module is done its execution
-	if !*quietFlag {
-		logger.Infof("finished execution of %s module", command)
+	if nmapMode {
+		// nmap mode: parse nmap output and run matching modules
+		err = s.RunNmapWithResults(ctx, *nmapFlag)
+		if err != nil {
+			logger.Fatal(err)
+		}
+	} else {
+		// normal mode: run selected module against targets
+		err = s.Run(ctx, command, *targetFlag)
+		if err != nil {
+			logger.Fatal(err)
+		}
+
+		// finish the execution
+		s.Stop()
+		// show which module is done its execution
+		if !*quietFlag {
+			logger.Infof("finished execution of %s module", command)
+		}
 	}
 }

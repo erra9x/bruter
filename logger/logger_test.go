@@ -211,3 +211,96 @@ func TestGlobalFunctions(t *testing.T) {
 		t.Errorf("Global Success failed: %s", buf.String())
 	}
 }
+
+// --- Verbose mode tests ---
+
+func TestVerbosef_SuppressedWhenNotEnabled(t *testing.T) {
+	l, _ := New(false, false)
+	buf := &bytes.Buffer{}
+	l.SetOutput(buf)
+
+	// verbose NOT enabled — nothing should be printed
+	l.Verbosef("should not appear: %s", "hidden")
+
+	if buf.Len() > 0 {
+		t.Errorf("Verbosef should not print when verbose=false, got: %s", buf.String())
+	}
+}
+
+func TestVerbosef_PrintsWhenEnabled(t *testing.T) {
+	l, _ := New(false, false)
+	buf := &bytes.Buffer{}
+	l.SetOutput(buf)
+	l.SetVerbose(true)
+
+	l.Verbosef("attempt: %s -> %s", "user", "pass")
+	output := buf.String()
+
+	if !strings.Contains(output, "attempt: user -> pass") {
+		t.Errorf("Verbosef message not found in output: %s", output)
+	}
+	if !strings.Contains(output, "[VERBOSE]") {
+		t.Errorf("Verbosef should have [VERBOSE] prefix: %s", output)
+	}
+}
+
+func TestVerbosef_TimestampFormat(t *testing.T) {
+	l, _ := New(false, false)
+	buf := &bytes.Buffer{}
+	l.SetOutput(buf)
+	l.SetVerbose(true)
+
+	l.Verbosef("ts test")
+	output := buf.String()
+
+	// Timestamp must be at the start: "2006-01-02 15:04:05"
+	if len(output) < 19 {
+		t.Fatalf("Output too short for timestamp: %q", output)
+	}
+	ts := output[:19]
+	if ts[4] != '-' || ts[7] != '-' || ts[10] != ' ' || ts[13] != ':' || ts[16] != ':' {
+		t.Errorf("Timestamp format wrong, got: %q", ts)
+	}
+}
+
+func TestVerbosef_IndependentOfQuietMode(t *testing.T) {
+	// verbose should still work even in quiet mode
+	l, _ := New(true, false) // quiet=true
+	buf := &bytes.Buffer{}
+	l.SetOutput(buf)
+	l.SetVerbose(true)
+
+	l.Verbosef("quiet+verbose: %d", 42)
+	output := buf.String()
+
+	if !strings.Contains(output, "quiet+verbose: 42") {
+		t.Errorf("Verbosef should print even in quiet mode when verbose=true, got: %s", output)
+	}
+}
+
+func TestSetVerbose_Toggle(t *testing.T) {
+	l, _ := New(false, false)
+	buf := &bytes.Buffer{}
+	l.SetOutput(buf)
+
+	// disabled by default
+	l.Verbosef("off")
+	if buf.Len() > 0 {
+		t.Errorf("should be silent initially, got: %s", buf.String())
+	}
+
+	// enable
+	l.SetVerbose(true)
+	l.Verbosef("on")
+	if !strings.Contains(buf.String(), "on") {
+		t.Errorf("should print after SetVerbose(true), got: %s", buf.String())
+	}
+
+	// disable again
+	buf.Reset()
+	l.SetVerbose(false)
+	l.Verbosef("off-again")
+	if buf.Len() > 0 {
+		t.Errorf("should be silent after SetVerbose(false), got: %s", buf.String())
+	}
+}

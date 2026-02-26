@@ -1,16 +1,18 @@
 package modules
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
-	"github.com/lib/pq"
-	"github.com/vflame6/bruter/utils"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
+	"github.com/vflame6/bruter/utils"
 )
 
 // PostgresHandler is an implementation of ModuleHandler for PostgreSQL service
-func PostgresHandler(dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
+func PostgresHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	// Build connection string
 	// sslmode is set based on encryption, but actual TLS is handled by our dialer
 	sslmode := "disable"
@@ -37,7 +39,7 @@ func PostgresHandler(dialer *utils.ProxyAwareDialer, timeout time.Duration, targ
 
 	db := sql.OpenDB(connector)
 
-	err = db.Ping()
+	err = db.PingContext(ctx)
 
 	if err != nil {
 		if strings.Contains(err.Error(), "pq: password authentication failed for user") {
