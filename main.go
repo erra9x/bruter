@@ -28,8 +28,8 @@ var (
 	// targets
 	targetFlag = app.Flag("target", "Target host or file with targets. Format host or host:port, one per line").Short('t').String()
 
-	// nmap input
-	nmapFlag = app.Flag("nmap", "Nmap output file (GNMAP or XML, auto-detected). Runs matching modules automatically.").Short('n').String()
+	// scan input (nmap, nessus, nexpose — auto-detected)
+	nmapFlag = app.Flag("nmap", "Scan output file (nmap GNMAP/XML, Nessus .nessus, Nexpose XML — auto-detected). Runs matching modules automatically.").Short('n').String()
 
 	// wordlist flags
 	usernameFlag = app.Flag("username", "Username or file with usernames").Short('u').String()
