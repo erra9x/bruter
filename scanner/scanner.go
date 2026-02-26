@@ -155,6 +155,14 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 	s.Opts.UsernameList = utils.LoadLines(s.Opts.Usernames)
 	s.Opts.PasswordList = utils.LoadLines(s.Opts.Passwords)
 
+	// start progress display (disabled in quiet mode)
+	var progress *Progress
+	if !logger.IsQuiet() {
+		totalCreds := int64(len(s.Opts.UsernameList)) * int64(len(s.Opts.PasswordList))
+		progress = NewProgress(s, totalCreds)
+		progress.Start()
+	}
+
 	// send targets to targets channel
 	go SendTargets(ctx, s.Targets, c.DefaultPort, targets)
 
@@ -172,6 +180,11 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 	parallelWg.Wait()
 	close(s.Results)
 	resultsWg.Wait()
+
+	// stop progress display before printing final stats
+	if progress != nil {
+		progress.Stop()
+	}
 
 	// Fix 2 & 4: flush/close output file after GetResults has finished draining
 	s.Stop()

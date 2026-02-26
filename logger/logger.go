@@ -237,6 +237,18 @@ func Successf(format string, v ...interface{}) {
 	defaultLogger.Successf(format, v...)
 }
 
+// IsQuiet returns whether the logger is in quiet mode.
+func (l *Logger) IsQuiet() bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.quiet
+}
+
+// IsQuiet returns whether the default logger is in quiet mode.
+func IsQuiet() bool {
+	return defaultLogger.IsQuiet()
+}
+
 // SetVerbose enables or disables verbose mode on the logger instance.
 func (l *Logger) SetVerbose(v bool) {
 	l.mu.Lock()
