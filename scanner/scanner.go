@@ -64,6 +64,57 @@ type Result struct {
 	Timestamp      time.Time // time of successful authentication
 }
 
+// printConfig prints a puredns-style configuration dashboard before the scan starts.
+func (s *Scanner) printConfig(command, targets string, targetCount int) {
+	o := s.Opts
+	userCount := len(o.UsernameList)
+	passCount := len(o.PasswordList)
+	comboCount := len(o.ComboList)
+	totalCreds := int64(userCount)*int64(passCount) + int64(comboCount)
+
+	fmt.Println("-------------------------------------------------------")
+	fmt.Printf(" [+] Module:           %s\n", command)
+	fmt.Printf(" [+] Targets:          %s (%d host(s))\n", targets, targetCount)
+	if o.Usernames != "" {
+		fmt.Printf(" [+] Usernames:        %s (%d)\n", o.Usernames, userCount)
+	}
+	if o.Passwords != "" {
+		fmt.Printf(" [+] Passwords:        %s (%d)\n", o.Passwords, passCount)
+	}
+	if o.Combo != "" {
+		fmt.Printf(" [+] Combo file:       %s (%d)\n", o.Combo, comboCount)
+	}
+	fmt.Printf(" [+] Credential pairs: %d\n", totalCreds)
+	fmt.Printf(" [+] Threads:          %d\n", o.Threads)
+	fmt.Printf(" [+] Parallel hosts:   %d\n", o.Parallel)
+	fmt.Printf(" [+] Timeout:          %s\n", o.Timeout)
+	if o.Delay > 0 {
+		fmt.Printf(" [+] Delay:            %s\n", o.Delay)
+	}
+	if o.Proxy != "" {
+		fmt.Printf(" [+] Proxy:            %s\n", o.Proxy)
+	}
+	if o.OutputFileName != "" {
+		fmt.Printf(" [+] Output:           %s\n", o.OutputFileName)
+	}
+	if o.JSON {
+		fmt.Printf(" [+] Format:           JSONL\n")
+	}
+	if o.StopOnSuccess {
+		fmt.Printf(" [+] Stop on success:  yes\n")
+	}
+	if o.GlobalStop {
+		fmt.Printf(" [+] Global stop:      yes\n")
+	}
+	if o.Verbose {
+		fmt.Printf(" [+] Verbose:          yes\n")
+	}
+	if o.Iface != "" {
+		fmt.Printf(" [+] Interface:        %s\n", o.Iface)
+	}
+	fmt.Println("-------------------------------------------------------")
+}
+
 // NewScanner function creates new scanner object based on options
 func NewScanner(options *Options) (*Scanner, error) {
 	var outputFile *os.File
@@ -176,6 +227,11 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 				})
 			}
 		}
+	}
+
+	// print startup configuration dashboard
+	if !logger.IsQuiet() {
+		s.printConfig(command, targets, count)
 	}
 
 	// start progress display (disabled in quiet mode)
