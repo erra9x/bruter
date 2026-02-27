@@ -47,6 +47,7 @@ var Modules = map[string]Module{
 	"vault":        {8200, VaultHandler, "admin", "admin"},
 	"xmpp":         {5222, XMPPHandler, "admin", "admin"},
 	"vnc":          {5900, VNCHandler, "", "admin"},
+	"winrm":        {5985, WinRMHandler, "Administrator", "password"},
 }
 
 type Module struct {

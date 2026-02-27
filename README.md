@@ -40,7 +40,7 @@ Created by Maksim Radaev/[@vflame6](https://github.com/vflame6)
 | **Remote Access** | `ssh`, `sshkey`, `telnet`, `rexec`, `rlogin`, `rsh`, `vnc` |
 | **Databases** | `mysql`, `mssql`, `postgres`, `mongo`, `redis`, `clickhouse`, `etcd` |
 | **Mail** | `smtp`, `imap`, `pop3` |
-| **Web / HTTP** | `http-basic`, `vault` |
+| **Web / HTTP** | `http-basic`, `vault`, `winrm` |
 | **Directory** | `ldap`, `ldaps` |
 | **File Sharing** | `ftp`, `smb` |
 | **Messaging** | `irc`, `xmpp`, `smpp`, `amqp` |
