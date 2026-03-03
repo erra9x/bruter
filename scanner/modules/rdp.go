@@ -128,7 +128,7 @@ func sendX224ConnReq(conn net.Conn) error {
 func readX224ConnConfirm(conn net.Conn) (bool, error) {
 	// Read TPKT header (4 bytes)
 	tpktHdr := make([]byte, 4)
-	if _, err := readFull(conn, tpktHdr); err != nil {
+	if _, err := utils.ReadFull(conn, tpktHdr); err != nil {
 		return false, fmt.Errorf("read tpkt: %w", err)
 	}
 	if tpktHdr[0] != tpktVersion {
@@ -141,7 +141,7 @@ func readX224ConnConfirm(conn net.Conn) (bool, error) {
 
 	// Read the rest
 	data := make([]byte, pktLen-4)
-	if _, err := readFull(conn, data); err != nil {
+	if _, err := utils.ReadFull(conn, data); err != nil {
 		return false, fmt.Errorf("read x224: %w", err)
 	}
 
@@ -589,7 +589,7 @@ func writeCredSSP(conn net.Conn, data []byte) error {
 func readCredSSP(conn net.Conn) ([]byte, error) {
 	// Read ASN.1 tag + length
 	hdr := make([]byte, 2)
-	if _, err := readFull(conn, hdr); err != nil {
+	if _, err := utils.ReadFull(conn, hdr); err != nil {
 		return nil, err
 	}
 
@@ -603,7 +603,7 @@ func readCredSSP(conn net.Conn) ([]byte, error) {
 			return nil, fmt.Errorf("asn1 length too large")
 		}
 		lb := make([]byte, lenBytes)
-		if _, err := readFull(conn, lb); err != nil {
+		if _, err := utils.ReadFull(conn, lb); err != nil {
 			return nil, err
 		}
 		consumed += lenBytes
@@ -621,7 +621,7 @@ func readCredSSP(conn net.Conn) ([]byte, error) {
 	if consumed > 2 {
 		copy(data[2:consumed], data[2:consumed])
 	}
-	if _, err := readFull(conn, data[consumed:]); err != nil {
+	if _, err := utils.ReadFull(conn, data[consumed:]); err != nil {
 		return nil, err
 	}
 	return data, nil
@@ -643,4 +643,3 @@ func hasCredSSPError(data []byte) bool {
 	return bytes.Contains(data, []byte{0xa3})
 }
 
-// readFull is defined in socks5.go

@@ -31,7 +31,7 @@ func RloginHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout 
 	}
 
 	resp := make([]byte, 1)
-	if _, err = readFull(conn, resp); err != nil {
+	if _, err = utils.ReadFull(conn, resp); err != nil {
 		return false, err
 	}
 	if resp[0] == 0x00 {
