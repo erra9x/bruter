@@ -3,7 +3,6 @@ package modules
 import (
 	"context"
 	"fmt"
-	"net"
 	"time"
 
 	"github.com/vflame6/bruter/utils"
@@ -28,7 +27,7 @@ func SOCKS5Handler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout 
 	}
 
 	resp := make([]byte, 2)
-	if _, err = readFull(conn, resp); err != nil {
+	if _, err = utils.ReadFull(conn, resp); err != nil {
 		return false, err
 	}
 	switch resp[1] {
@@ -56,7 +55,7 @@ func SOCKS5Handler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout 
 	}
 
 	authResp := make([]byte, 2)
-	if _, err = readFull(conn, authResp); err != nil {
+	if _, err = utils.ReadFull(conn, authResp); err != nil {
 		return false, err
 	}
 
@@ -66,15 +65,4 @@ func SOCKS5Handler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout 
 	return false, nil // auth failure
 }
 
-// readFull reads exactly len(buf) bytes from conn.
-func readFull(conn net.Conn, buf []byte) (int, error) {
-	total := 0
-	for total < len(buf) {
-		n, err := conn.Read(buf[total:])
-		total += n
-		if err != nil {
-			return total, err
-		}
-	}
-	return total, nil
-}
+
