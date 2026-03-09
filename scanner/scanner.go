@@ -226,7 +226,11 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 		s.Opts.UsernameList = append(s.Opts.UsernameList, wordlists.DefaultUsernames...)
 	}
 	if s.Opts.Passwords != "" {
-		s.Opts.PasswordList = utils.LoadLines(s.Opts.Passwords)
+		if s.Opts.Command == "sshkey" {
+			s.Opts.PasswordList = utils.LoadSSHKeyPaths(s.Opts.Passwords)
+		} else {
+			s.Opts.PasswordList = utils.LoadLines(s.Opts.Passwords)
+		}
 	}
 	if s.Opts.Defaults {
 		if s.Opts.Command == "sshkey" {
@@ -496,3 +500,5 @@ func (s *Scanner) ThreadHandler(ctx context.Context, wg *sync.WaitGroup, credent
 		}
 	}
 }
+
+

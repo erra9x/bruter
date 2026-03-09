@@ -55,7 +55,14 @@ func XMPPHandler(ctx context.Context, _ *utils.ProxyAwareDialer, timeout time.Du
 		}
 
 		msg := strings.ToLower(r.err.Error())
-		if strings.Contains(msg, "not-authorized") || strings.Contains(msg, "authentication failed") {
+		// go-xmpp prefixes all SASL failures with "auth failure:" —
+		// the suffix may be a human-readable <text> (e.g. "The response
+		// provided by the client doesn't match...") instead of the SASL
+		// element name (e.g. "not-authorized"). Match the prefix to
+		// catch all authentication rejections.
+		if strings.HasPrefix(msg, "auth failure") ||
+			strings.Contains(msg, "not-authorized") ||
+			strings.Contains(msg, "authentication failed") {
 			return false, nil
 		}
 		return false, r.err
