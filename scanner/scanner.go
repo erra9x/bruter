@@ -156,9 +156,9 @@ func (s *Scanner) printNmapConfig(source string, totalTargets, totalServices int
 		fmt.Printf(" [+] Combo file:        %s (%d)\n", o.Combo, comboCount)
 	}
 	fmt.Printf(" [+] Credential pairs:  %d (per service)\n", totalCreds)
-	fmt.Printf(" [+] Parallel services: %d\n", o.ConcurrentServices)
 	fmt.Printf(" [+] Parallel hosts:    %d\n", o.Parallel)
-	fmt.Printf(" [+] Threads per host:  %d\n", o.Threads)
+	fmt.Printf(" [+] Services per host: %d\n", o.ConcurrentServices)
+	fmt.Printf(" [+] Threads per service: %d\n", o.Threads)
 	fmt.Printf(" [+] Timeout:           %s\n", o.Timeout)
 	if o.Delay > 0 {
 		fmt.Printf(" [+] Delay:             %s\n", o.Delay)

@@ -2,182 +2,87 @@ package scanner
 
 import (
 	"context"
-	"fmt"
 	"io"
-	"net"
-	"strconv"
 	"sync"
 
 	"github.com/vflame6/bruter/logger"
 	"github.com/vflame6/bruter/parser"
-	"github.com/vflame6/bruter/scanner/modules"
-	"github.com/vflame6/bruter/utils"
-	"github.com/vflame6/bruter/wordlists"
 )
 
-// RunStdin reads targets from an io.Reader (stdin), groups them by service,
-// and runs matching modules in parallel — same logic as RunNmap.
+// RunStdin reads targets from an io.Reader (stdin), groups them by host,
+// and runs matching modules — same host-first architecture as RunNmap.
 func (s *Scanner) RunStdin(ctx context.Context, r io.Reader) error {
 	targets, err := parser.ParseStdin(r)
 	if err != nil {
-		return fmt.Errorf("parsing stdin: %w", err)
+		return err
 	}
 	if len(targets) == 0 {
 		logger.Infof("no supported targets found on stdin")
 		return nil
 	}
 
-	// Group targets by bruter module
-	grouped := make(map[string][]parser.Target)
+	// Print service summary
+	serviceCounts := make(map[string]int)
 	for _, t := range targets {
-		grouped[t.Service] = append(grouped[t.Service], t)
+		serviceCounts[t.Service]++
+	}
+	logger.Infof("found %d targets across %d services from stdin", len(targets), len(serviceCounts))
+	for svc, count := range serviceCounts {
+		logger.Infof("  %s: %d target(s)", svc, count)
 	}
 
-	totalTargets := 0
-	for _, tgts := range grouped {
-		totalTargets += len(tgts)
-	}
-	logger.Infof("found %d targets across %d services from stdin", totalTargets, len(grouped))
-	for svc, tgts := range grouped {
-		logger.Infof("  %s: %d target(s)", svc, len(tgts))
-	}
+	// Pre-load credentials
+	s.loadCredentials()
 
-	// Pre-load usernames once (same for all modules)
-	// -u and --defaults combine when both are specified
-	if s.Opts.Usernames != "" {
-		s.Opts.UsernameList = utils.LoadLines(s.Opts.Usernames)
-	}
-	if s.Opts.Defaults {
-		s.Opts.UsernameList = append(s.Opts.UsernameList, wordlists.DefaultUsernames...)
-	}
+	// Build per-module password lists
+	defaultPasswords, sshkeyPasswords := s.buildPasswordLists()
 
-	// Pre-load passwords from file once (if user specified -p).
-	// sshkey passwords are loaded lazily only when needed.
-	var userPasswords []string
-	if s.Opts.Passwords != "" {
-		userPasswords = utils.LoadLines(s.Opts.Passwords)
-	}
-	var sshkeyPasswords []string
-	if s.Opts.Passwords != "" {
-		sshkeyPasswords = utils.LoadSSHKeyPaths(s.Opts.Passwords)
-	}
-
-	// Build default password list (non-sshkey) once
-	var defaultPasswords []string
-	if userPasswords != nil {
-		defaultPasswords = append(defaultPasswords, userPasswords...)
-	}
-	if s.Opts.Defaults {
-		defaultPasswords = append(defaultPasswords, wordlists.DefaultPasswords...)
-	}
-	// Set PasswordList for the dashboard (shows non-sshkey count)
-	s.Opts.PasswordList = defaultPasswords
-
-	// Print aggregate dashboard
+	// Print dashboard
 	if !logger.IsQuiet() {
-		s.printNmapConfig("stdin", totalTargets, len(grouped))
+		s.printNmapConfig("stdin", len(targets), len(serviceCounts))
 	}
 
-	// Run modules concurrently, bounded by ConcurrentServices semaphore
-	sem := make(chan struct{}, s.Opts.ConcurrentServices)
-	var moduleWg sync.WaitGroup
+	// Group by host and process with same architecture as RunNmap
+	hostGroups := s.groupByHost(targets)
 
-	for command, stdinTargets := range grouped {
-		if ctx.Err() != nil {
-			break
-		}
-		if s.Opts.GlobalStop && s.globalDone.Load() {
-			break
-		}
+	uniqueHosts := len(hostGroups)
+	logger.Infof("scanning %d unique hosts", uniqueHosts)
 
-		mod, ok := modules.Modules[command]
-		if !ok {
-			logger.Debugf("skipping unknown module %s", command)
-			continue
-		}
+	parallel := s.Opts.Parallel
+	if uniqueHosts < parallel {
+		parallel = uniqueHosts
+	}
 
-		// Build per-module password list to avoid race conditions
-		var passwords []string
-		if command == "sshkey" {
-			if sshkeyPasswords != nil {
-				passwords = append(passwords, sshkeyPasswords...)
+	hostCh := make(chan []hostService, parallel*BufferMultiplier)
+	go func() {
+		for _, services := range hostGroups {
+			select {
+			case hostCh <- services:
+			case <-ctx.Done():
+				break
 			}
-			if s.Opts.Defaults {
-				passwords = append(passwords, wordlists.DefaultSSHKeys...)
-			}
-		} else {
-			passwords = defaultPasswords
 		}
+		close(hostCh)
+	}()
 
-		// Convert parser targets to scanner targets (resolve DNS)
-		var scanTargets []*modules.Target
-		for _, st := range stdinTargets {
-			ip := net.ParseIP(st.Host)
-			if ip == nil {
-				resolved, resolveErr := utils.LookupAddr(st.Host)
-				if resolveErr != nil {
-					logger.Debugf("can't resolve %s: %v", st.Host, resolveErr)
-					continue
+	var hostWg sync.WaitGroup
+	for i := 0; i < parallel; i++ {
+		hostWg.Add(1)
+		go func() {
+			defer hostWg.Done()
+			for services := range hostCh {
+				if ctx.Err() != nil {
+					return
 				}
-				ip = resolved
+				if s.Opts.GlobalStop && s.globalDone.Load() {
+					return
+				}
+				s.processHost(ctx, services, defaultPasswords, sshkeyPasswords)
 			}
-			scanTargets = append(scanTargets, &modules.Target{
-				IP:             ip,
-				Port:           st.Port,
-				OriginalTarget: net.JoinHostPort(st.Host, strconv.Itoa(st.Port)),
-				Encryption:     true,
-			})
-		}
-
-		if len(scanTargets) == 0 {
-			continue
-		}
-
-		// Acquire semaphore slot
-		sem <- struct{}{}
-		moduleWg.Add(1)
-
-		go func(command string, mod modules.Module, scanTargets []*modules.Target, passwords []string) {
-			defer moduleWg.Done()
-			defer func() { <-sem }()
-
-			logger.Infof("executing %s module (%d targets)", command, len(scanTargets))
-
-			// Feed targets into channel
-			targetCh := make(chan *modules.Target, len(scanTargets))
-			for _, t := range scanTargets {
-				targetCh <- t
-			}
-			close(targetCh)
-
-			// Create a per-module scanner copy for thread-safe options
-			modScanner := *s
-			modOpts := *s.Opts
-			modOpts.Command = command
-			modOpts.PasswordList = passwords
-			modScanner.Opts = &modOpts
-			modScanner.Targets = targetCh
-
-			// Determine parallelism for this batch
-			parallel := modOpts.Parallel
-			if len(scanTargets) < parallel {
-				parallel = len(scanTargets)
-			}
-
-			// Run parallel handlers
-			var parallelWg sync.WaitGroup
-			for i := 0; i < parallel; i++ {
-				parallelWg.Add(1)
-				go modScanner.ParallelHandler(ctx, &parallelWg, &mod)
-			}
-			parallelWg.Wait()
-		}(command, mod, scanTargets, passwords)
+		}()
 	}
 
-	moduleWg.Wait()
-
-	// Close results channel so GetResults can finish draining.
-	// The caller (RunStdinWithResults) waits for GetResults and prints stats.
+	hostWg.Wait()
 	close(s.Results)
 
 	return nil
@@ -200,13 +105,11 @@ func (s *Scanner) RunStdinWithResults(ctx context.Context, r io.Reader) error {
 
 	err := s.RunStdin(ctx, r)
 
-	// Stop progress display before printing final stats
 	if progress != nil {
 		progress.Stop()
 		logger.SetProgressClearer(nil)
 	}
 
-	// Wait for all results to be processed before reading counters.
 	resultsWg.Wait()
 	s.Stop()
 
