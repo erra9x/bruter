@@ -38,3 +38,4 @@ bruter
 TESTING.md
 ARCHITECTURE.md
 review/
+.golangci.yml
