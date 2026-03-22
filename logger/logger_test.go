@@ -163,7 +163,8 @@ func TestLogger_FormattedMethods(t *testing.T) {
 }
 
 func TestLogger_TimestampFormat(t *testing.T) {
-	l, _ := New(false, false)
+	// Timestamps only appear in debug mode
+	l, _ := New(false, true)
 	buf := &bytes.Buffer{}
 	l.SetOutput(buf)
 
@@ -173,7 +174,7 @@ func TestLogger_TimestampFormat(t *testing.T) {
 	// Check timestamp format (YYYY-MM-DD HH:MM:SS)
 	// Example: 2024-01-15 10:30:45
 	if len(output) < 19 {
-		t.Errorf("Output too short to contain timestamp: %s", output)
+		t.Fatalf("Output too short to contain timestamp: %q", output)
 	}
 
 	// Verify timestamp structure
@@ -181,6 +182,20 @@ func TestLogger_TimestampFormat(t *testing.T) {
 	if timestampPart[4] != '-' || timestampPart[7] != '-' ||
 		timestampPart[10] != ' ' || timestampPart[13] != ':' || timestampPart[16] != ':' {
 		t.Errorf("Invalid timestamp format: %s", timestampPart)
+	}
+}
+
+func TestLogger_NormalModeNoTimestamp(t *testing.T) {
+	// Normal mode (non-debug) should not include timestamps
+	l, _ := New(false, false)
+	buf := &bytes.Buffer{}
+	l.SetOutput(buf)
+
+	l.Info("test")
+	output := buf.String()
+
+	if !strings.HasPrefix(output, "[*]") {
+		t.Errorf("Normal mode should start with prefix, not timestamp: %q", output)
 	}
 }
 
@@ -245,7 +260,8 @@ func TestVerbosef_PrintsWhenEnabled(t *testing.T) {
 }
 
 func TestVerbosef_TimestampFormat(t *testing.T) {
-	l, _ := New(false, false)
+	// Timestamps only appear in debug mode
+	l, _ := New(false, true)
 	buf := &bytes.Buffer{}
 	l.SetOutput(buf)
 	l.SetVerbose(true)
