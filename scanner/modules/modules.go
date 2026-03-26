@@ -31,7 +31,6 @@ var Modules = map[string]Module{
 	"influxdb":      {8086, InfluxDBHandler, "admin", "admin"},
 	"irc":           {6667, IRCHandler, "bruter", "password"},
 	"ldap":          {389, LDAPHandler, "cn=admin,dc=example,dc=com", "admin"},
-	"ldaps":         {636, LDAPHandler, "cn=admin,dc=example,dc=com", "admin"},
 	"memcached":     {11211, MemcachedHandler, "admin", "admin"},
 	"mongo":         {27017, MongoHandler, "", ""},
 	"mssql":         {1433, MSSQLHandler, "sa", "sa"},

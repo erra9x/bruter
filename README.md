@@ -15,7 +15,7 @@ Created by Maksim Radaev/[@vflame6](https://github.com/vflame6)
 
 ---
 
-`bruter` is a fast, concurrent network services bruteforce tool written in Go. It supports 55 protocols, scan file auto-detection, and flexible wordlist options — built for pentesters who need reliable credential testing at scale.
+`bruter` is a fast, concurrent network services bruteforce tool written in Go. It supports 54 protocols, scan file auto-detection, and flexible wordlist options — built for pentesters who need reliable credential testing at scale.
 
 ## Features
 
@@ -36,7 +36,7 @@ Created by Maksim Radaev/[@vflame6](https://github.com/vflame6)
 | **Databases** | `mysql`, `mssql`, `postgres`, `oracle`, `mongo`, `redis`, `clickhouse`, `cassandra`, `neo4j`, `etcd`, `influxdb`, `firebird`, `memcached`, `couchdb`, `elasticsearch` |
 | **Mail** | `smtp`, `smtp-enum`, `imap`, `pop3`, `nntp` |
 | **Web / HTTP** | `http-basic`, `http-form`, `http-proxy`, `vault` |
-| **Directory** | `ldap`, `ldaps` |
+| **Directory** | `ldap` |
 | **File Sharing** | `ftp`, `smb`, `svn` |
 | **Messaging** | `irc`, `xmpp`, `smpp`, `amqp` |
 | **Network** | `socks5`, `snmp`, `rtsp`, `rpcap` |

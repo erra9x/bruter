@@ -94,7 +94,6 @@ var (
 	influxdbCommand      = app.Command("influxdb", "InfluxDB module (port 8086)")
 	ircCommand           = app.Command("irc", "IRC server password module (port 6667)")
 	ldapCommand          = app.Command("ldap", "LDAP module (port 389 / 636 TLS)")
-	ldapsCommand         = app.Command("ldaps", "LDAPS module (port 636 TLS)")
 	memcachedCommand     = app.Command("memcached", "Memcached SASL auth module (port 11211)")
 	mongoCommand         = app.Command("mongo", "MongoDB module (port 27017)")
 	mssqlCommand         = app.Command("mssql", "Microsoft SQL Server module (port 1433)")

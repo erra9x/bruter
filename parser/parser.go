@@ -32,7 +32,7 @@ var serviceMap = map[string]string{
 	"imaps":          "imap",
 	"snmp":           "snmp",
 	"ldap":           "ldap",
-	"ldaps":          "ldaps",
+	"ldaps":          "ldap",
 	"ms-sql-s":       "mssql",
 	"ms-sql-m":       "mssql",
 	"mysql":          "mysql",
