@@ -47,6 +47,7 @@ var Modules = map[string]Module{
 	"vault":        {8200, VaultHandler, "admin", "admin"},
 	"xmpp":         {5222, XMPPHandler, "admin", "admin"},
 	"rdp":          {3389, RDPHandler, "Administrator", "password"},
+	"vmauthd":      {902, VMAuthdHandler, "root", "vmware"},
 	"vnc":          {5900, VNCHandler, "", "admin"},
 	"winrm":        {5985, WinRMHandler, "Administrator", "password"},
 }

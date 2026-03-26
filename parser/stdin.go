@@ -46,6 +46,7 @@ var portServiceMap = map[int]string{
 	5985:  "winrm",
 	6379:  "redis",
 	// 8080, 8443: http-basic excluded — manual only
+	902:   "vmauthd",
 	9000:  "clickhouse",
 	27017: "mongo",
 }

@@ -72,6 +72,7 @@ var serviceMap = map[string]string{
 	"wsmans":         "winrm",
 	"winrm":          "winrm",
 	"ms-wbt-server":  "rdp",
+	"vmauthd":        "vmauthd",
 	// https/https-alt excluded — see http comment above.
 	"submission":     "smtp",
 	"smtps":          "smtp",
