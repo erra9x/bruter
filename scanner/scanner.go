@@ -349,12 +349,14 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 		s.Opts.Threads = 1
 	}
 
-	// if number of targets is less than number of parallels, decrease parallels
+	// count targets: file (lines), comma-separated, or single host
 	if utils.IsFileExists(targets) {
 		count, err = utils.CountLinesInFile(targets)
 		if err != nil {
 			return err
 		}
+	} else if strings.Contains(targets, ",") {
+		count = len(strings.Split(targets, ","))
 	} else {
 		count = 1
 	}
