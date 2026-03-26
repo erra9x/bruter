@@ -99,6 +99,7 @@ var (
 	teamSpeakCommand    = app.Command("teamspeak", "TeamSpeak 3 ServerQuery module (port 10011)")
 	telnetCommand       = app.Command("telnet", "Telnet module (port 23 / TLS)")
 	vaultCommand        = app.Command("vault", "HashiCorp Vault userpass module (port 8200)")
+	vmauthdCommand      = app.Command("vmauthd", "VMware vmauthd module (port 902)")
 	vncCommand          = app.Command("vnc", "VNC module (port 5900)")
 	winrmCommand        = app.Command("winrm", "WinRM Basic Auth module (port 5985 / 5986 TLS)")
 	xmppCommand         = app.Command("xmpp", "XMPP SASL authentication module (port 5222)")
