@@ -22,12 +22,13 @@ import (
 const BufferMultiplier = 4
 
 type Scanner struct {
-	Opts       *Options
-	Targets    chan *modules.Target
-	Results    chan *Result
-	Attempts   *atomic.Int64 // total credential pairs tried
-	Successes  *atomic.Int64 // total successful logins found
-	globalDone *atomic.Bool  // set true on first success when GlobalStop=true
+	Opts        *Options
+	Targets     chan *modules.Target
+	Results     chan *Result
+	Attempts    *atomic.Int64 // total credential pairs tried
+	Successes   *atomic.Int64 // total successful logins found
+	TargetCount int64         // total number of targets (set before progress starts)
+	globalDone  *atomic.Bool  // set true on first success when GlobalStop=true
 }
 
 type Options struct {
@@ -247,21 +248,9 @@ func (s *Scanner) runWithResults(ctx context.Context, scanFunc func() error) err
 	resultsWg.Add(1)
 	go GetResults(s.Results, s.Opts.OutputFile, &resultsWg, s.Successes, s.Opts.JSON)
 
-	// Start progress display (disabled in quiet mode).
-	var progress *Progress
-	if !logger.IsQuiet() {
-		totalCreds := int64(len(s.Opts.UsernameList))*int64(len(s.Opts.PasswordList)) + int64(len(s.Opts.ComboList))
-		progress = NewProgress(s, totalCreds)
-		logger.SetProgressClearer(progress.Clear)
-		progress.Start()
-	}
-
+	// Run the scan function, which sets TargetCount, loads credentials,
+	// and manages its own progress display.
 	err := scanFunc()
-
-	if progress != nil {
-		progress.Stop()
-		logger.SetProgressClearer(nil)
-	}
 
 	resultsWg.Wait()
 	s.Stop()
@@ -373,6 +362,9 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 	// pre-load credentials into memory once
 	s.loadCredentials()
 
+	// set target count for progress tracking
+	s.TargetCount = int64(count)
+
 	// print startup configuration dashboard
 	if !logger.IsQuiet() {
 		s.printDashboard(dashboardConfig{
@@ -393,7 +385,7 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 	var progress *Progress
 	if !logger.IsQuiet() {
 		totalCreds := int64(len(s.Opts.UsernameList))*int64(len(s.Opts.PasswordList)) + int64(len(s.Opts.ComboList))
-		progress = NewProgress(s, totalCreds)
+		progress = NewProgress(s, totalCreds, s.TargetCount)
 		logger.SetProgressClearer(progress.Clear)
 		progress.Start()
 	}

@@ -63,6 +63,9 @@ func (s *Scanner) runAllMode(ctx context.Context, source string, targets []parse
 	// Pre-load credentials
 	s.loadCredentials()
 
+	// Set target count for progress tracking
+	s.TargetCount = int64(len(targets))
+
 	// Build per-module password lists (sshkey needs special handling)
 	defaultPasswords, sshkeyPasswords := s.buildPasswordLists()
 
@@ -76,6 +79,15 @@ func (s *Scanner) runAllMode(ctx context.Context, source string, targets []parse
 		})
 	}
 
+	// Start progress display now that target count and credentials are known
+	var progress *Progress
+	if !logger.IsQuiet() {
+		totalCreds := int64(len(s.Opts.UsernameList))*int64(len(s.Opts.PasswordList)) + int64(len(s.Opts.ComboList))
+		progress = NewProgress(s, totalCreds, s.TargetCount)
+		logger.SetProgressClearer(progress.Clear)
+		progress.Start()
+	}
+
 	logger.Debugf("found %d targets across %d services in %s", len(targets), len(serviceCounts), source)
 	for svc, count := range serviceCounts {
 		logger.Debugf("  %s: %d target(s)", svc, count)
@@ -87,6 +99,11 @@ func (s *Scanner) runAllMode(ctx context.Context, source string, targets []parse
 
 	// Process hosts in parallel
 	s.runHostGroups(ctx, hostGroups, defaultPasswords, sshkeyPasswords)
+
+	if progress != nil {
+		progress.Stop()
+		logger.SetProgressClearer(nil)
+	}
 
 	close(s.Results)
 	return nil

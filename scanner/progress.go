@@ -9,22 +9,25 @@ import (
 // Progress displays a live status line on stderr during a scan.
 // It reads atomic counters from the Scanner and refreshes periodically.
 type Progress struct {
-	scanner   *Scanner
-	totalCreds int64 // total credential pairs per target (users × passwords)
-	startTime  time.Time
-	stopCh     chan struct{}
-	doneCh     chan struct{}
+	scanner       *Scanner
+	totalCreds    int64 // total credential pairs per target (users × passwords)
+	totalAttempts int64 // total attempts across all targets (totalCreds × targetCount)
+	startTime     time.Time
+	stopCh        chan struct{}
+	doneCh        chan struct{}
 }
 
 // NewProgress creates a progress reporter for the given scanner.
 // totalCreds is len(usernames) * len(passwords).
-func NewProgress(s *Scanner, totalCreds int64) *Progress {
+// targetCount is the number of targets being scanned.
+func NewProgress(s *Scanner, totalCreds int64, targetCount int64) *Progress {
 	return &Progress{
-		scanner:    s,
-		totalCreds: totalCreds,
-		startTime:  time.Now(),
-		stopCh:     make(chan struct{}),
-		doneCh:     make(chan struct{}),
+		scanner:       s,
+		totalCreds:    totalCreds,
+		totalAttempts: totalCreds * targetCount,
+		startTime:     time.Now(),
+		stopCh:        make(chan struct{}),
+		doneCh:        make(chan struct{}),
 	}
 }
 
@@ -77,12 +80,18 @@ func (p *Progress) render() {
 	elapsedStr := formatDuration(elapsed)
 
 	// build status line
-	line := fmt.Sprintf("\r\033[K[%s] %d attempts | %.1f/s | %d found",
-		elapsedStr, attempts, speed, successes)
+	var line string
+	if p.totalAttempts > 0 {
+		line = fmt.Sprintf("\r\033[K[%s] %d/%d attempts | %.1f/s | %d found",
+			elapsedStr, attempts, p.totalAttempts, speed, successes)
+	} else {
+		line = fmt.Sprintf("\r\033[K[%s] %d attempts | %.1f/s | %d found",
+			elapsedStr, attempts, speed, successes)
+	}
 
-	// add ETA if we have speed and totalCreds info
-	if speed > 0 && p.totalCreds > 0 && attempts < p.totalCreds {
-		remaining := float64(p.totalCreds-attempts) / speed
+	// add ETA if we have speed and total info
+	if speed > 0 && p.totalAttempts > 0 && attempts < p.totalAttempts {
+		remaining := float64(p.totalAttempts-attempts) / speed
 		line += fmt.Sprintf(" | ETA %s", formatDuration(time.Duration(remaining)*time.Second))
 	}
 
