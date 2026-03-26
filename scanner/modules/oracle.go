@@ -5,9 +5,10 @@ import (
 	"database/sql"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
-	_ "github.com/sijms/go-ora/v2"
+	go_ora "github.com/sijms/go-ora/v2"
 	"github.com/vflame6/bruter/utils"
 )
 
@@ -22,10 +23,12 @@ func OracleHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout 
 		target.Port,
 	)
 
-	db, err := sql.Open("oracle", connString)
-	if err != nil {
-		return false, err
+	connector := go_ora.NewConnector(connString)
+	if oraConn, ok := connector.(*go_ora.OracleConnector); ok {
+		oraConn.Dialer(dialer) // proxy/interface support via ProxyAwareDialer
 	}
+
+	db := sql.OpenDB(connector)
 	defer db.Close()
 
 	db.SetMaxOpenConns(1)
@@ -34,14 +37,17 @@ func OracleHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout 
 	authCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	err = db.PingContext(authCtx)
+	err := db.PingContext(authCtx)
 	if err != nil {
 		if authCtx.Err() != nil {
-			// Timeout = connection issue, not auth failure.
 			return false, err
 		}
-		// Oracle returns ORA-01017 for invalid username/password.
-		return false, nil
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "ora-01017") || strings.Contains(msg, "invalid username") ||
+			strings.Contains(msg, "invalid password") || strings.Contains(msg, "logon denied") {
+			return false, nil
+		}
+		return false, err
 	}
 
 	return true, nil

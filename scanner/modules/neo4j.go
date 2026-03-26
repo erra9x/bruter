@@ -11,6 +11,7 @@ import (
 
 // Neo4jHandler is an implementation of ModuleHandler for Neo4j Bolt protocol.
 // Uses the official neo4j-go-driver to authenticate (port 7687).
+// Note: the neo4j driver does not support custom dialers; proxy/interface binding is not available.
 func Neo4jHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	scheme := "bolt"
 	if target.Encryption {

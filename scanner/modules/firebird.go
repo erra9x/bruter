@@ -13,6 +13,7 @@ import (
 
 // FirebirdHandler is an implementation of ModuleHandler for Firebird SQL database.
 // Uses firebirdsql pure-Go driver (port 3050). No external Firebird client required.
+// Note: the firebirdsql driver does not support custom dialers; proxy/interface binding is not available.
 func FirebirdHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	// DSN format: user:password@host:port/database
 	// Default database path for Firebird.

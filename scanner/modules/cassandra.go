@@ -16,6 +16,7 @@ func CassandraHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeo
 	cluster.Port = target.Port
 	cluster.Timeout = timeout
 	cluster.ConnectTimeout = timeout
+	cluster.Dialer = dialer // proxy/interface support via ProxyAwareDialer
 	cluster.Authenticator = gocql.PasswordAuthenticator{
 		Username: credential.Username,
 		Password: credential.Password,
@@ -23,6 +24,8 @@ func CassandraHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeo
 	cluster.Consistency = gocql.One
 	cluster.DisableInitialHostLookup = true
 	cluster.NumConns = 1
+	cluster.RetryPolicy = &gocql.SimpleRetryPolicy{NumRetries: 0}
+	cluster.ReconnectInterval = 0
 
 	if target.Encryption {
 		cluster.SslOpts = &gocql.SslOptions{
