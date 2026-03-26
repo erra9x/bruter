@@ -15,7 +15,7 @@ Created by Maksim Radaev/[@vflame6](https://github.com/vflame6)
 
 ---
 
-`bruter` is a fast, concurrent network services bruteforce tool written in Go. It supports 53 protocols, scan file auto-detection, and flexible wordlist options — built for pentesters who need reliable credential testing at scale.
+`bruter` is a fast, concurrent network services bruteforce tool written in Go. It supports 55 protocols, scan file auto-detection, and flexible wordlist options — built for pentesters who need reliable credential testing at scale.
 
 ## Features
 
