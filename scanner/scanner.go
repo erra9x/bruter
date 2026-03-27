@@ -22,12 +22,13 @@ import (
 const BufferMultiplier = 4
 
 type Scanner struct {
-	Opts       *Options
-	Targets    chan *modules.Target
-	Results    chan *Result
-	Attempts   *atomic.Int64 // total credential pairs tried
-	Successes  *atomic.Int64 // total successful logins found
-	globalDone *atomic.Bool  // set true on first success when GlobalStop=true
+	Opts        *Options
+	Targets     chan *modules.Target
+	Results     chan *Result
+	Attempts    *atomic.Int64 // total credential pairs tried
+	Successes   *atomic.Int64 // total successful logins found
+	TargetCount int64         // total number of targets (set before progress starts)
+	globalDone  *atomic.Bool  // set true on first success when GlobalStop=true
 }
 
 type Options struct {
@@ -56,6 +57,11 @@ type Options struct {
 	JSON                bool   // --json: output results as JSONL
 	Iface               string // --iface: bind outgoing connections to this interface
 	GlobalStop          bool   // --global-stop: stop entire run on first success across all hosts
+	NoStats             bool   // --no-stats: disable progress bar
+	UserAsPass          bool   // --user-as-pass: try username as password
+	Blank               bool   // --blank: try empty password
+	Reversed            bool   // --reversed: try reversed username as password
+	ServiceFilter       string // --service: filter services in all mode
 }
 
 type Result struct {
@@ -76,9 +82,10 @@ type dashboardConfig struct {
 	HostCount int    // number of hosts
 
 	// Nmap/stdin mode fields
-	Source       string // scan file path or "stdin"
-	ServiceCount int    // number of distinct services
-	TargetCount  int    // total service:port targets
+	Source       string   // scan file path or "stdin"
+	ServiceCount int      // number of distinct services
+	TargetCount  int      // total service:port targets
+	ServiceNames []string // identified service names (sorted)
 }
 
 // printDashboard prints a configuration dashboard before the scan starts.
@@ -100,7 +107,7 @@ func (s *Scanner) printDashboard(cfg dashboardConfig) {
 	} else {
 		// Nmap/stdin mode
 		fmt.Printf(" [+] Source:              %s\n", cfg.Source)
-		fmt.Printf(" [+] Services:            %d\n", cfg.ServiceCount)
+		fmt.Printf(" [+] Services:            %s (%d)\n", strings.Join(cfg.ServiceNames, ", "), cfg.ServiceCount)
 		fmt.Printf(" [+] Total targets:       %d\n", cfg.TargetCount)
 	}
 
@@ -169,6 +176,15 @@ func (s *Scanner) printDashboard(cfg dashboardConfig) {
 	fmt.Println("-------------------------------------------------------")
 }
 
+// reverseString returns the input string reversed.
+func reverseString(s string) string {
+	runes := []rune(s)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
+}
+
 // loadCredentials pre-loads usernames, passwords, and combo lists into Options.
 // For sshkey module, passwords are loaded as SSH key paths.
 func (s *Scanner) loadCredentials() {
@@ -204,6 +220,24 @@ func (s *Scanner) loadCredentials() {
 				})
 			}
 		}
+	}
+
+	// Generate extra credential pairs from usernames.
+	// These are prepended to ComboList so they're tried first (quick wins).
+	var extraCreds []modules.Credential
+	for _, user := range s.Opts.UsernameList {
+		if s.Opts.Blank {
+			extraCreds = append(extraCreds, modules.Credential{Username: user, Password: ""})
+		}
+		if s.Opts.UserAsPass {
+			extraCreds = append(extraCreds, modules.Credential{Username: user, Password: user})
+		}
+		if s.Opts.Reversed {
+			extraCreds = append(extraCreds, modules.Credential{Username: user, Password: reverseString(user)})
+		}
+	}
+	if len(extraCreds) > 0 {
+		s.Opts.ComboList = append(extraCreds, s.Opts.ComboList...)
 	}
 }
 
@@ -246,21 +280,9 @@ func (s *Scanner) runWithResults(ctx context.Context, scanFunc func() error) err
 	resultsWg.Add(1)
 	go GetResults(s.Results, s.Opts.OutputFile, &resultsWg, s.Successes, s.Opts.JSON)
 
-	// Start progress display (disabled in quiet mode).
-	var progress *Progress
-	if !logger.IsQuiet() {
-		totalCreds := int64(len(s.Opts.UsernameList))*int64(len(s.Opts.PasswordList)) + int64(len(s.Opts.ComboList))
-		progress = NewProgress(s, totalCreds)
-		logger.SetProgressClearer(progress.Clear)
-		progress.Start()
-	}
-
+	// Run the scan function, which sets TargetCount, loads credentials,
+	// and manages its own progress display.
 	err := scanFunc()
-
-	if progress != nil {
-		progress.Stop()
-		logger.SetProgressClearer(nil)
-	}
 
 	resultsWg.Wait()
 	s.Stop()
@@ -359,18 +381,23 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 		s.Opts.Threads = 1
 	}
 
-	// if number of targets is less than number of parallels, decrease parallels
+	// count targets: file (lines), comma-separated, or single host
 	if utils.IsFileExists(targets) {
 		count, err = utils.CountLinesInFile(targets)
 		if err != nil {
 			return err
 		}
+	} else if strings.Contains(targets, ",") {
+		count = len(strings.Split(targets, ","))
 	} else {
 		count = 1
 	}
 
 	// pre-load credentials into memory once
 	s.loadCredentials()
+
+	// set target count for progress tracking
+	s.TargetCount = int64(count)
 
 	// print startup configuration dashboard
 	if !logger.IsQuiet() {
@@ -388,11 +415,11 @@ func (s *Scanner) Run(ctx context.Context, command, targets string) error {
 		s.Opts.Parallel = count
 	}
 
-	// start progress display (disabled in quiet mode)
+	// start progress display (disabled in quiet or no-stats mode)
 	var progress *Progress
-	if !logger.IsQuiet() {
+	if !logger.IsQuiet() && !s.Opts.NoStats {
 		totalCreds := int64(len(s.Opts.UsernameList))*int64(len(s.Opts.PasswordList)) + int64(len(s.Opts.ComboList))
-		progress = NewProgress(s, totalCreds)
+		progress = NewProgress(s, totalCreds, s.TargetCount)
 		logger.SetProgressClearer(progress.Clear)
 		progress.Start()
 	}

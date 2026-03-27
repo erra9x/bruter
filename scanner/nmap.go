@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/vflame6/bruter/logger"
@@ -46,14 +48,47 @@ func (s *Scanner) RunNmapWithResults(ctx context.Context, nmapFile string) error
 // It loads credentials, prints the dashboard, groups targets by host, and
 // processes them with the host-first concurrency model.
 func (s *Scanner) runAllMode(ctx context.Context, source string, targets []parser.Target) error {
+	// Apply service filter if specified
+	if s.Opts.ServiceFilter != "" {
+		allowed := make(map[string]bool)
+		for _, svc := range strings.Split(s.Opts.ServiceFilter, ",") {
+			svc = strings.TrimSpace(svc)
+			if svc != "" {
+				allowed[svc] = true
+			}
+		}
+		var filtered []parser.Target
+		for _, t := range targets {
+			if allowed[t.Service] {
+				filtered = append(filtered, t)
+			}
+		}
+		if len(filtered) == 0 {
+			logger.Infof("no targets match service filter: %s", s.Opts.ServiceFilter)
+			close(s.Results)
+			return nil
+		}
+		targets = filtered
+	}
+
 	// Count services
 	serviceCounts := make(map[string]int)
 	for _, t := range targets {
 		serviceCounts[t.Service]++
 	}
 
+	// Collect sorted service names for dashboard
+	serviceNames := make([]string, 0, len(serviceCounts))
+	for svc := range serviceCounts {
+		serviceNames = append(serviceNames, svc)
+	}
+	sort.Strings(serviceNames)
+
 	// Pre-load credentials
 	s.loadCredentials()
+
+	// Set target count for progress tracking
+	s.TargetCount = int64(len(targets))
 
 	// Build per-module password lists (sshkey needs special handling)
 	defaultPasswords, sshkeyPasswords := s.buildPasswordLists()
@@ -64,7 +99,17 @@ func (s *Scanner) runAllMode(ctx context.Context, source string, targets []parse
 			Source:       source,
 			ServiceCount: len(serviceCounts),
 			TargetCount:  len(targets),
+			ServiceNames: serviceNames,
 		})
+	}
+
+	// Start progress display (disabled in quiet or no-stats mode)
+	var progress *Progress
+	if !logger.IsQuiet() && !s.Opts.NoStats {
+		totalCreds := int64(len(s.Opts.UsernameList))*int64(len(s.Opts.PasswordList)) + int64(len(s.Opts.ComboList))
+		progress = NewProgress(s, totalCreds, s.TargetCount)
+		logger.SetProgressClearer(progress.Clear)
+		progress.Start()
 	}
 
 	logger.Debugf("found %d targets across %d services in %s", len(targets), len(serviceCounts), source)
@@ -78,6 +123,11 @@ func (s *Scanner) runAllMode(ctx context.Context, source string, targets []parse
 
 	// Process hosts in parallel
 	s.runHostGroups(ctx, hostGroups, defaultPasswords, sshkeyPasswords)
+
+	if progress != nil {
+		progress.Stop()
+		logger.SetProgressClearer(nil)
+	}
 
 	close(s.Results)
 	return nil

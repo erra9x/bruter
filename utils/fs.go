@@ -4,9 +4,11 @@ import (
 	"bufio"
 	"bytes"
 	"errors"
-	"github.com/vflame6/bruter/logger"
 	"io"
 	"os"
+	"strings"
+
+	"github.com/vflame6/bruter/logger"
 )
 
 // IsFileExists checks if a file exists at the given path.
@@ -82,8 +84,16 @@ func ParseFileByLine(filename string) <-chan string {
 			if err := scanner.Err(); err != nil {
 				logger.Debugf("error while reading file %s: %v", filename, err)
 			}
+		} else if strings.Contains(filename, ",") {
+			// comma-separated list of targets
+			for _, part := range strings.Split(filename, ",") {
+				t := strings.TrimSpace(part)
+				if t != "" {
+					out <- t
+				}
+			}
 		} else {
-			// if filename is not a file, send it as a line
+			// single value
 			out <- filename
 		}
 	}()
