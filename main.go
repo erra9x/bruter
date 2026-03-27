@@ -19,7 +19,7 @@ import (
 const AUTHOR = "Maksim Radaev (@vflame6)"
 
 // VERSION should be linked to actual tag
-const VERSION = "v1.0.4"
+const VERSION = "v1.1.0"
 
 // BANNER format string. It is used in PrintBanner function with VERSION
 const BANNER = "\n    __               __           \n   / /_  _______  __/ /____  _____\n  / __ \\/ ___/ / / / __/ _ \\/ ___/\n / /_/ / /  / /_/ / /_/  __/ /    \n/_.___/_/   \\__,_/\\__/\\___/_/      %s\n                                  \nMade by %s\n\n"
@@ -35,10 +35,10 @@ var (
 	nmapFlag = app.Flag("input-file", "Scan output file (nmap GNMAP/XML, Nessus .nessus, Nexpose XML — auto-detected). Use with 'all' command.").Short('n').String()
 
 	// wordlist flags
-	usernameFlag  = app.Flag("username", "Username or file with usernames").Short('u').String()
-	passwordFlag  = app.Flag("password", "Password or file with passwords").Short('p').String()
-	comboFlag     = app.Flag("combo", "Combo wordlist file with user:pass pairs, one per line").String()
-	defaultsFlag  = app.Flag("defaults", "Use built-in default username and password wordlists (user-specified -u/-p take priority)").Default("false").Bool()
+	usernameFlag   = app.Flag("username", "Username or file with usernames").Short('u').String()
+	passwordFlag   = app.Flag("password", "Password or file with passwords").Short('p').String()
+	comboFlag      = app.Flag("combo", "Combo wordlist file with user:pass pairs, one per line").String()
+	defaultsFlag   = app.Flag("defaults", "Use built-in default username and password wordlists (user-specified -u/-p take priority)").Default("false").Bool()
 	userAsPassFlag = app.Flag("user-as-pass", "Try username as password for each user").Default("false").Bool()
 	blankFlag      = app.Flag("blank", "Try blank/empty password for each user").Default("false").Bool()
 	reversedFlag   = app.Flag("reversed", "Try reversed username as password for each user").Default("false").Bool()
