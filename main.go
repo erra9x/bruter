@@ -19,7 +19,7 @@ import (
 const AUTHOR = "Maksim Radaev (@vflame6)"
 
 // VERSION should be linked to actual tag
-const VERSION = "v1.1.0"
+const VERSION = "v1.1.1"
 
 // BANNER format string. It is used in PrintBanner function with VERSION
 const BANNER = "\n    __               __           \n   / /_  _______  __/ /____  _____\n  / __ \\/ ___/ / / / __/ _ \\/ ___/\n / /_/ / /  / /_/ / /_/  __/ /    \n/_.___/_/   \\__,_/\\__/\\___/_/      %s\n                                  \nMade by %s\n\n"
