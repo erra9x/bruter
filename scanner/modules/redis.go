@@ -8,16 +8,27 @@ import (
 	"github.com/vflame6/bruter/utils"
 )
 
+type noopLogger struct{}
+
+func (l *noopLogger) Printf(_ context.Context, _ string, _ ...interface{}) {}
+
+func init() {
+	redis.SetLogger(&noopLogger{})
+}
+
 // RedisHandler is an implementation of ModuleHandler for Redis service
 func RedisHandler(ctx context.Context, dialer *utils.ProxyAwareDialer, timeout time.Duration, target *Target, credential *Credential) (bool, error) {
 	addr := target.Addr()
 
 	// Create the Redis client options
 	options := &redis.Options{
-		Addr:     addr,               // Redis server address
-		Dialer:   dialer.DialContext, // Set the custom dialer function
-		DB:       0,
-		Username: credential.Username,
+		Addr:         addr,               // Redis server address
+		Dialer:       dialer.DialContext, // Set the custom dialer function
+		DB:           0,
+		Username:     credential.Username,
+		MaxRetries:   -1,
+		ReadTimeout:  timeout,
+		WriteTimeout: timeout,
 	}
 
 	if credential.Password != "" {

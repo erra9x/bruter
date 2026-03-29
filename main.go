@@ -46,7 +46,7 @@ var (
 	// optimization flags
 	concurrentServicesFlag = app.Flag("concurrent-services", "Number of services to scan on host in parallel ('all' only)").Short('N').Default("4").Int()
 	parallelFlag           = app.Flag("concurrent-hosts", "Number of hosts in parallel").Short('C').Default("32").Int()
-	threadsFlag            = app.Flag("concurrent-threads", "Number of parallel threads per service").Short('c').Default("10").Int()
+	threadsFlag            = app.Flag("concurrent-threads", "Number of parallel threads per service").Short('c').Default("5").Int()
 	noStatsFlag            = app.Flag("no-stats", "Disable progress bar for better performance").Default("false").Bool()
 	delayFlag              = app.Flag("delay", "Delay between each attempt. Will always use single thread if set").Short('d').Default("0s").Duration()
 	timeoutFlag            = app.Flag("timeout", "Connection timeout in seconds").Default("10s").Duration()
