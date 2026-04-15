@@ -71,7 +71,7 @@ Flags:
       --[no-]reversed          Try reversed username as password for each user
   -N, --concurrent-services=4  Number of services to scan on host in parallel ('all' only)
   -C, --concurrent-hosts=32    Number of hosts in parallel
-  -c, --concurrent-threads=10  Number of parallel threads per service
+  -c, --concurrent-threads=5   Number of parallel threads per service
       --[no-]no-stats          Disable progress bar for better performance
   -d, --delay=0s               Delay between each attempt. Will always use single thread if set
       --timeout=10s            Connection timeout in seconds
