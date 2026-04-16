@@ -1,11 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -40,10 +42,55 @@ func readmeText(t *testing.T) string {
 	return string(data)
 }
 
+func liveServices(t *testing.T, servicesOutput string) []string {
+	t.Helper()
+	servicesCountRe := regexp.MustCompile(`(?m)^(\d+) services available$`)
+	match := servicesCountRe.FindStringSubmatch(servicesOutput)
+	if match == nil {
+		t.Fatal("failed to find services count in --list-services output")
+	}
+	count, err := strconv.Atoi(match[1])
+	if err != nil {
+		t.Fatalf("parse service count: %v", err)
+	}
+
+	lineRe := regexp.MustCompile(`(?m)^([a-z0-9-]+)\s+\d+$`)
+	matches := lineRe.FindAllStringSubmatch(servicesOutput, -1)
+	services := make([]string, 0, len(matches))
+	for _, m := range matches {
+		services = append(services, m[1])
+	}
+	if len(services) != count {
+		t.Fatalf("parsed %d services from --list-services, want %d", len(services), count)
+	}
+	return services
+}
+
+func readmeModuleTableServices(t *testing.T, readme string) []string {
+	t.Helper()
+	sectionRe := regexp.MustCompile(`(?ms)^### Available Modules \(\d+\)\n\n(?P<table>(?:^\|.*\|\n)+)`)
+	match := sectionRe.FindStringSubmatch(readme)
+	if match == nil {
+		t.Fatal("failed to find Available Modules table in README")
+	}
+	mods := regexp.MustCompile("`([^`]+)`").FindAllStringSubmatch(match[1], -1)
+	services := make([]string, 0, len(mods))
+	for _, m := range mods {
+		services = append(services, m[1])
+	}
+	return services
+}
+
+func sortedStrings(items []string) []string {
+	out := append([]string(nil), items...)
+	sort.Strings(out)
+	return out
+}
+
 func TestReadmeMatchesLiveCLIHelp(t *testing.T) {
 	readme := readmeText(t)
 	help := runBruter(t, "--help")
-	services := runBruter(t, "--list-services")
+	servicesOutput := runBruter(t, "--list-services")
 
 	commandsLineRe := regexp.MustCompile(`(?m)^Commands: .+$`)
 	commandsLine := commandsLineRe.FindString(help)
@@ -63,17 +110,22 @@ func TestReadmeMatchesLiveCLIHelp(t *testing.T) {
 		t.Fatalf("README flag defaults drifted from live CLI\nwant line: %s", threadsLine)
 	}
 
-	servicesCountRe := regexp.MustCompile(`(?m)^(\d+) services available$`)
-	match := servicesCountRe.FindStringSubmatch(services)
-	if match == nil {
-		t.Fatal("failed to find services count in --list-services output")
-	}
-	count, err := strconv.Atoi(match[1])
-	if err != nil {
-		t.Fatalf("parse service count: %v", err)
-	}
-	heading := "### Available Modules (" + strconv.Itoa(count) + ")"
+	live := liveServices(t, servicesOutput)
+	heading := "### Available Modules (" + strconv.Itoa(len(live)) + ")"
 	if !strings.Contains(readme, heading) {
 		t.Fatalf("README module count drifted from live CLI\nwant heading: %s", heading)
+	}
+
+	readmeMods := readmeModuleTableServices(t, readme)
+	if len(readmeMods) != len(live) {
+		t.Fatalf("README module table count drifted from live CLI\nreadme=%d live=%d", len(readmeMods), len(live))
+	}
+
+	liveSorted := sortedStrings(live)
+	readmeSorted := sortedStrings(readmeMods)
+	for i := range liveSorted {
+		if liveSorted[i] != readmeSorted[i] {
+			t.Fatalf("README module table drifted from live CLI\nreadme=%s\nlive=%s", fmt.Sprint(readmeSorted), fmt.Sprint(liveSorted))
+		}
 	}
 }
